@@ -2,15 +2,6 @@
 
 Automated bot for interacting with the 0G Storage Network to help maximize airdrop potential.
 
-## Overview
-
-This tool automates the process of uploading random files to the 0G Storage Network on Galileo Testnet. It helps users participate in testnet activities which may lead to potential future airdrops.
-
-## Support
-
-For questions or support, open an issue on GitHub or join our community:
-- [Telegram](https://t.me/AirdropInsiderID)
-
 ## Features
 
 - **Multi-Wallet Support**: Run tasks across multiple private keys sequentially
@@ -23,10 +14,10 @@ For questions or support, open an issue on GitHub or join our community:
 
 ```bash
 # Clone the repository
-git clone https://github.com/airdropinsiders/0g-Storage-Auto-Bot.git
+git clone https://github.com/19seniman/og-storage-autoler-peler.git
 
 # Navigate to the directory
-cd 0g-Storage-Auto-Bot
+cd og-storage-autoler-peler
 
 # Install dependencies
 npm install
