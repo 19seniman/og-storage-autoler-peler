@@ -2,6 +2,14 @@
 
 Automated bot for interacting with the 0G Storage Network to help maximize airdrop potential.
 
+##  🍉 Donate for  watermelon
+
+**EVM Address**  
+`0xf01fb9a6855f175d3f3e28e00fa617009c38ef59`
+
+**via Dana**  
+`085830000502`
+
 ## Features
 
 - **Multi-Wallet Support**: Run tasks across multiple private keys sequentially
