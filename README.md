@@ -5,10 +5,10 @@ Automated bot for interacting with the 0G Storage Network to help maximize airdr
 ##  🍉 Donate for  watermelon
 
 **EVM Address**  
-`0xf01fb9a6855f175d3f3e28e00fa617009c38ef59`
+``0xf01fb9a6855f175d3f3e28e00fa617009c38ef59``
 
 **via Dana**  
-`085830000502`
+``085830000502``
 
 ## Features
 
