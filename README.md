@@ -58,7 +58,7 @@ socks5://username:password@ip:port
 Run the bot with:
 
 ```bash
-node index.js
+node main.js
 ```
 
 When prompted, enter the number of files you want to upload per wallet.
