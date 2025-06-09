@@ -35,6 +35,7 @@ nano .env
 format on nano .env:
 
 PRIVATE_KEY=fill yout pvkey
+
 save : ctrl x y enter
 
 (Optional) Create a `proxies.txt` file with one proxy per line:
