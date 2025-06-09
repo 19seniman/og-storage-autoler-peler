@@ -20,32 +20,24 @@ Automated bot for interacting with the 0G Storage Network to help maximize airdr
 
 ## Installation
 
-```bash
-# Clone the repository
+```
 git clone https://github.com/19seniman/og-storage-autoler-peler.git
-
-# Navigate to the directory
+```
+```
 cd og-storage-autoler-peler
-
-# Install dependencies
+```
+```
 npm install
 ```
-
-## Configuration
-
-1. Create a `.env` file in the root directory with your private keys:
-
 ```
-# For a single wallet
-PRIVATE_KEY=your_private_key_here
-
-# OR for multiple wallets
-PRIVATE_KEY_1=your_first_private_key
-PRIVATE_KEY_2=your_second_private_key
-PRIVATE_KEY_3=your_third_private_key
+nano .env
 ```
+format on nano .env:
 
-2. (Optional) Create a `proxies.txt` file with one proxy per line:
+PRIVATE_KEY=fill yout pvkey
+save : ctrl x y enter
+
+(Optional) Create a `proxies.txt` file with one proxy per line:
 
 ```
 http://username:password@ip:port
@@ -55,7 +47,7 @@ socks5://username:password@ip:port
 
 ## Usage
 
-Run the bot with:
+Run the script
 
 ```bash
 node main.js
