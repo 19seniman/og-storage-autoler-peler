@@ -7,7 +7,7 @@ const fs = require('fs');
 const { HttpsProxyAgent } = require('https-proxy-agent');
 const path = require('path');
 
-// --- Logger Improvements ---
+// --- Definisi Colors dan Logger yang Pasti Benar ---
 const colors = {
     reset: "\x1b[0m",
     bright: "\x1b[1m",
@@ -52,6 +52,7 @@ const colors = {
     bgLightWhite: "\x1b[107m",
 };
 
+// Definisikan logger setelah colors agar semua referensi warna pasti ada
 const logger = {
     info: (msg) => console.log(`${colors.lightBlue}${colors.bright}[INFO]${colors.reset} ${msg}`),
     warn: (msg) => console.log(`${colors.yellow}${colors.bright}[WARN]${colors.reset} ${msg}`),
@@ -61,7 +62,6 @@ const logger = {
     process: (msg) => console.log(`\n${colors.magenta}${colors.bright}--- ${msg} ---${colors.reset}\n`),
     debug: (msg) => console.log(`${colors.gray}[DEBUG] ${msg}${colors.reset}`),
     bye: (msg) => console.log(`${colors.yellow}[BYE] ${msg}${colors.reset}`),
-    // Perbaikan: Pastikan critical ada di sini
     critical: (msg) => console.log(`${colors.bgRed}${colors.white}${colors.bright}[CRITICAL] ${msg}${colors.reset}`),
     summary: (msg) => console.log(`${colors.lightGreen}${colors.bright}[SUMMARY] ${msg}${colors.reset}`),
     section: (msg) => {
@@ -70,16 +70,17 @@ const logger = {
         if (msg) console.log(`${colors.lightCyan}${colors.bright}${msg}${colors.reset}`);
         console.log(`${colors.lightCyan}${line}${colors.reset}\n`);
     },
-    // Perbaikan: Mengatasi masalah 'undefined' pada banner
+    // Perbaikan final untuk banner
     banner: () => {
-        const bannerLine = `${colors.lightGreen}${colors.bright}============================================${colors.reset}`;
-        const pleaseSupport = `${colors.lightGreen}${colors.bright}         🍉🍉PLEASE SUPPORT PALESTINE ON SOCIAL MEDIA 🍉🍉${colors.reset}`;
-        const coderInfo = `${colors.lightGreen}${colors.bright}         19Seniman from Insider${colors.reset}`;
+        // Menggunakan konstanta warna secara langsung untuk menghindari masalah 'undefined'
+        const line = `============================================`;
+        const supportText = `         🍉🍉PLEASE SUPPORT PALESTINE ON SOCIAL MEDIA 🍉🍉`;
+        const coderText = `         19Seniman from Insider`;
 
-        console.log(`\n${bannerLine}`);
-        console.log(`${pleaseSupport}`);
-        console.log(`${coderInfo}`);
-        console.log(`${bannerLine}\n`);
+        console.log(`\n${colors.lightGreen}${colors.bright}${line}${colors.reset}`);
+        console.log(`${colors.lightGreen}${colors.bright}${supportText}${colors.reset}`);
+        console.log(`${colors.lightGreen}${colors.bright}${coderText}${colors.reset}`);
+        console.log(`${colors.lightGreen}${colors.bright}${line}${colors.reset}\n`);
     },
     step: (msg) => console.log(`${colors.white}├── ${msg}${colors.reset}`),
     subStep: (msg) => console.log(`${colors.gray}│   └── ${msg}${colors.reset}`),
@@ -317,7 +318,7 @@ function saveTransactionResult(txData) {
 
 async function main() {
     try {
-        logger.banner();
+        logger.banner(); // Panggil banner di awal
         logger.process('Initializing Setup');
         loadPrivateKeys();
         loadProxies();
@@ -407,12 +408,12 @@ async function main() {
             rl.close();
         });
     } catch (error) {
-        // Mengatasi TypeError: logger.critical is not a function
-        // Pastikan logger.critical ada sebelum digunakan
+        // Fallback jika logger.critical masih bermasalah
         if (logger && typeof logger.critical === 'function') {
             logger.critical(`A critical error occurred in the main process: ${error.message}`);
         } else {
-            console.error(`\x1b[41m\x1b[37m\x1b[1m[CRITICAL] A critical error occurred in the main process: ${error.message}\x1b[0m`);
+            // Jika logger.critical gagal, setidaknya pesan error tetap terlihat
+            console.error(`\x1b[41m\x1b[37m\x1b[1m[CRITICAL ERROR] Script encountered an unhandled error: ${error.message}\x1b[0m`);
         }
         rl.close();
     }
