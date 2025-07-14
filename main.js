@@ -7,39 +7,73 @@ const fs = require('fs');
 const { HttpsProxyAgent } = require('https-proxy-agent');
 
 const colors = {
-  reset: "\x1b[0m",
-  cyan: "\x1b[36m",
-  green: "\x1b[32m",
-  yellow: "\x1b[33m",
-  red: "\x1b[31m",
-  white: "\x1b[37m",
-  gray: "\x1b[90m",
-  bold: "\x1b[1m"
+    reset: "\x1b[0m",
+    bright: "\x1b[1m",
+    dim: "\x1b[2m",
+    underscore: "\x1b[4m",
+    blink: "\x1b[5m",
+    reverse: "\x1b[7m",
+    hidden: "\x1b[8m",
+
+    black: "\x1b[30m",
+    red: "\x1b[31m",
+    green: "\x1b[32m",
+    yellow: "\x1b[33m",
+    blue: "\x1b[34m",
+    magenta: "\x1b[35m",
+    cyan: "\x1b[36m",
+    white: "\x1b[37m",
+    gray: "\x1b[90m",
+    lightRed: "\x1b[91m",
+    lightGreen: "\x1b[92m",
+    lightYellow: "\x1b[93m",
+    lightBlue: "\x1b[94m",
+    lightMagenta: "\x1b[95m",
+    lightCyan: "\x1b[96m",
+    lightWhite: "\x1b[97m",
+
+    bgBlack: "\x1b[40m",
+    bgRed: "\x1b[41m",
+    bgGreen: "\x1b[42m",
+    bgYellow: "\x1b[43m",
+    bgBlue: "\x1b[44m",
+    bgMagenta: "\x1b[45m",
+    bgCyan: "\x1b[46m",
+    bgWhite: "\x1b[47m",
+    bgGray: "\x1b[100m",
+    bgLightRed: "\x1b[101m",
+    bgLightGreen: "\x1b[102m",
+    bgLightYellow: "\x1b[103m",
+    bgLightBlue: "\x1b[104m",
+    bgLightMagenta: "\x1b[105m",
+    bgLightCyan: "\x1b[106m",
+    bgLightWhite: "\x1b[107m",
 };
 
 const logger = {
-  info: (msg) => console.log(`${colors.green}[✓] ${msg}${colors.reset}`),
-  warn: (msg) => console.log(`${colors.yellow}[⚠] ${msg}${colors.reset}`),
-  error: (msg) => console.log(`${colors.red}[✗] ${msg}${colors.reset}`),
-  success: (msg) => console.log(`${colors.green}[✅] ${msg}${colors.reset}`),
-  loading: (msg) => console.log(`${colors.cyan}[⟳] ${msg}${colors.reset}`),
-  process: (msg) => console.log(`\n${colors.white}[➤] ${msg}${colors.reset}`),
-  debug: (msg) => console.log(`${colors.gray}[…] ${msg}${colors.reset}`),
-  bye: (msg) => console.log(`${colors.yellow}[…] ${msg}${colors.reset}`),
-  critical: (msg) => console.log(`${colors.red}${colors.bold}[❌] ${msg}${colors.reset}`),
-  summary: (msg) => console.log(`${colors.white}[✓] ${msg}${colors.reset}`),
-  section: (msg) => {
-    const line = '='.repeat(50);
-    console.log(`\n${colors.cyan}${line}${colors.reset}`);
-    if (msg) console.log(`${colors.cyan}${msg}${colors.reset}`);
-    console.log(`${colors.cyan}${line}${colors.reset}\n`);
-  },
-  banner: () => {
-    console.log(`${colors.cyan}${colors.bold}`);
-    console.log(`--------------------------------------------`);
-    console.log(` 0G Storage Scan Auto Bot - Airdrop Insiders`);
-    console.log(`--------------------------------------------${colors.reset}\n`);
-  }
+    info: (msg) => console.log(`${colors.green}[✓] ${msg}${colors.reset}`),
+    warn: (msg) => console.log(`${colors.yellow}[⚠] ${msg}${colors.reset}`),
+    error: (msg) => console.log(`${colors.red}[✗] ${msg}${colors.reset}`),
+    success: (msg) => console.log(`${colors.green}[✅] ${msg}${colors.reset}`),
+    loading: (msg) => console.log(`${colors.cyan}[⟳] ${msg}${colors.reset}`),
+    process: (msg) => console.log(`\n${colors.white}[➤] ${msg}${colors.reset}`),
+    debug: (msg) => console.log(`${colors.gray}[…] ${msg}${colors.reset}`),
+    bye: (msg) => console.log(`${colors.yellow}[…] ${msg}${colors.reset}`),
+    critical: (msg) => console.log(`${colors.red}${colors.bright}[❌] ${msg}${colors.reset}`), // Menggunakan colors.bright untuk bold
+    summary: (msg) => console.log(`${colors.white}[✓] ${msg}${colors.reset}`),
+    section: (msg) => {
+        const line = '='.repeat(50);
+        console.log(`\n${colors.cyan}${line}${colors.reset}`);
+        if (msg) console.log(`${colors.cyan}${msg}${colors.reset}`);
+        console.log(`${colors.cyan}${line}${colors.reset}\n`);
+    },
+    banner: () => {
+        // Memastikan penggunaan warna di setiap baris dan bold untuk teks
+        console.log(`${colors.cyan}${colors.bright}`); // Mengaktifkan cyan dan bold untuk banner
+        console.log(`--------------------------------------------`);
+        console.log(`🍉 19Seniman From Insider 🍉`);
+        console.log(`--------------------------------------------${colors.reset}\n`); // Mengatur ulang warna setelah banner
+    }
 };
 
 const CHAIN_ID = 16601;
