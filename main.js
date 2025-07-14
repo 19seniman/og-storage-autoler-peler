@@ -61,6 +61,7 @@ const logger = {
     process: (msg) => console.log(`\n${colors.magenta}${colors.bright}--- ${msg} ---${colors.reset}\n`),
     debug: (msg) => console.log(`${colors.gray}[DEBUG] ${msg}${colors.reset}`),
     bye: (msg) => console.log(`${colors.yellow}[BYE] ${msg}${colors.reset}`),
+    // Perbaikan: Pastikan critical ada di sini
     critical: (msg) => console.log(`${colors.bgRed}${colors.white}${colors.bright}[CRITICAL] ${msg}${colors.reset}`),
     summary: (msg) => console.log(`${colors.lightGreen}${colors.bright}[SUMMARY] ${msg}${colors.reset}`),
     section: (msg) => {
@@ -69,15 +70,16 @@ const logger = {
         if (msg) console.log(`${colors.lightCyan}${colors.bright}${msg}${colors.reset}`);
         console.log(`${colors.lightCyan}${line}${colors.reset}\n`);
     },
+    // Perbaikan: Mengatasi masalah 'undefined' pada banner
     banner: () => {
-        const bannerText = `
-${colors.lightGreen}============================================
-${colors.lightGreen}         🍉 0G.ai Upload Bot 🍉
-${colors.lightGreen}         Coded by 19Seniman
-${colors.lightGreen}         From Insider
-${colors.lightGreen}============================================${colors.reset}
-`;
-        console.log(bannerText);
+        const bannerLine = `${colors.lightGreen}${colors.bright}============================================${colors.reset}`;
+        const pleaseSupport = `${colors.lightGreen}${colors.bright}         🍉🍉PLEASE SUPPORT PALESTINE ON SOCIAL MEDIA 🍉🍉${colors.reset}`;
+        const coderInfo = `${colors.lightGreen}${colors.bright}         19Seniman from Insider${colors.reset}`;
+
+        console.log(`\n${bannerLine}`);
+        console.log(`${pleaseSupport}`);
+        console.log(`${coderInfo}`);
+        console.log(`${bannerLine}\n`);
     },
     step: (msg) => console.log(`${colors.white}├── ${msg}${colors.reset}`),
     subStep: (msg) => console.log(`${colors.gray}│   └── ${msg}${colors.reset}`),
@@ -395,7 +397,7 @@ async function main() {
             logger.section('Upload Session Summary');
             logger.summary(`Total wallets processed: ${privateKeys.length}`);
             logger.summary(`Uploads per wallet requested: ${count}`);
-            logger.summary(`Total successful uploads: ${successful}`);
+            logger.success(`Total successful uploads: ${successful}`);
             if (failed > 0) {
                 logger.critical(`Total failed uploads: ${failed}`);
             } else {
@@ -405,7 +407,13 @@ async function main() {
             rl.close();
         });
     } catch (error) {
-        logger.critical(`A critical error occurred in the main process: ${error.message}`);
+        // Mengatasi TypeError: logger.critical is not a function
+        // Pastikan logger.critical ada sebelum digunakan
+        if (logger && typeof logger.critical === 'function') {
+            logger.critical(`A critical error occurred in the main process: ${error.message}`);
+        } else {
+            console.error(`\x1b[41m\x1b[37m\x1b[1m[CRITICAL] A critical error occurred in the main process: ${error.message}\x1b[0m`);
+        }
         rl.close();
     }
 }
