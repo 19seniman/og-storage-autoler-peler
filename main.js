@@ -7,23 +7,17 @@ const fs = require('fs');
 const { HttpsProxyAgent } = require('https-proxy-agent');
 const path = require('path');
 
-// Objek 'colors' dan 'loggerTheme' tidak diubah, tetap sama.
+// --- Logger Improvements ---
 const colors = {
     reset: "\x1b[0m",
-    cyan: "\x1b[36m",
-    green: "\x1b[32m",
-    yellow: "\x1b[33m",
-    red: "\x1b[31m",
-    white: "\x1b[37m",
-    gray: "\x1b[90m",
-    bold: "\x1b[1m"
-};
+    bright: "\x1b[1m",
+    dim: "\x1b[2m",
+    underscore: "\x1b[4m",
+    blink: "\x1b[5m",
+    reverse: "\x1b[7m",
+    hidden: "\x1b[8m",
 
-const loggerTheme = {
-    reset: "\x1b[0m",
-    bold: "\x1b[1m",
-    italic: "\x1b[3m",
-    underline: "\x1b[4m",
+    black: "\x1b[30m",
     red: "\x1b[31m",
     green: "\x1b[32m",
     yellow: "\x1b[33m",
@@ -31,39 +25,63 @@ const loggerTheme = {
     magenta: "\x1b[35m",
     cyan: "\x1b[36m",
     white: "\x1b[37m",
+    gray: "\x1b[90m", // Light Black
+    lightRed: "\x1b[91m",
+    lightGreen: "\x1b[92m",
+    lightYellow: "\x1b[93m",
+    lightBlue: "\x1b[94m",
+    lightMagenta: "\x1b[95m",
+    lightCyan: "\x1b[96m",
+    lightWhite: "\x1b[97m",
+
+    bgBlack: "\x1b[40m",
+    bgRed: "\x1b[41m",
+    bgGreen: "\x1b[42m",
+    bgYellow: "\x1b[43m",
+    bgBlue: "\x1b[44m",
+    bgMagenta: "\x1b[45m",
+    bgCyan: "\x1b[46m",
+    bgWhite: "\x1b[47m",
     bgGray: "\x1b[100m",
+    bgLightRed: "\x1b[101m",
+    bgLightGreen: "\x1b[102m",
+    bgLightYellow: "\x1b[103m",
+    bgLightBlue: "\x1b[104m",
+    bgLightMagenta: "\x1b[105m",
+    bgLightCyan: "\x1b[106m",
+    bgLightWhite: "\x1b[107m",
 };
 
-const fancyBox = (title, subtitle) => {
-    // Menambahkan pengaman jika title atau subtitle tidak ada
-    const mainTitle = title || '';
-    const subTitle = subtitle || '';
-    console.log(`${loggerTheme.cyan}${loggerTheme.bold}`);
-    console.log('╔══════════════════════════════════════════════╗');
-    console.log(`║  ${mainTitle.padEnd(42)}  ║`);
-    if (subtitle) {
-        console.log(`║  ${subTitle.padEnd(42)}  ║`);
-    }
-    console.log('╚══════════════════════════════════════════════╝');
-    console.log(loggerTheme.reset);
-};
-
-// --- PERBAIKAN: Menambahkan level 'debug' dan 'critical' pada logger ---
 const logger = {
-    info: (msg) => console.log(`${loggerTheme.blue}[ ℹ️ INFO ] → ${msg}${loggerTheme.reset}`),
-    warn: (msg) => console.log(`${loggerTheme.yellow}[ ⚠️ WARNING ] → ${msg}${loggerTheme.reset}`),
-    error: (msg) => console.log(`${loggerTheme.red}[ ✖️ ERROR ] → ${msg}${loggerTheme.reset}`),
-    success: (msg) => console.log(`${loggerTheme.green}[ ✔️ DONE ] → ${msg}${loggerTheme.reset}`),
-    loading: (msg) => console.log(`${loggerTheme.cyan}[ ⌛️ LOADING ] → ${msg}${loggerTheme.reset}`),
-    step: (msg) => console.log(`${loggerTheme.magenta}[ ➔ STEP ] → ${msg}${loggerTheme.reset}`),
-    debug: (msg) => console.log(`${colors.gray}[ 🐞 DEBUG ] → ${msg}${colors.reset}`),
-    critical: (msg) => {
-        console.log(`${loggerTheme.red}${loggerTheme.bold}[ 💥 CRITICAL ] → ${msg}${loggerTheme.reset}`);
-        process.exit(1); // Menambahkan exit agar program berhenti
+    info: (msg) => console.log(`${colors.lightBlue}${colors.bright}[INFO]${colors.reset} ${msg}`),
+    warn: (msg) => console.log(`${colors.yellow}${colors.bright}[WARN]${colors.reset} ${msg}`),
+    error: (msg) => console.log(`${colors.red}${colors.bright}[ERROR]${colors.reset} ${msg}`),
+    success: (msg) => console.log(`${colors.green}${colors.bright}[SUCCESS]${colors.reset} ${msg}`),
+    loading: (msg) => console.log(`${colors.cyan}${colors.bright}[WAIT]${colors.reset} ${msg}`),
+    process: (msg) => console.log(`\n${colors.magenta}${colors.bright}--- ${msg} ---${colors.reset}\n`),
+    debug: (msg) => console.log(`${colors.gray}[DEBUG] ${msg}${colors.reset}`),
+    bye: (msg) => console.log(`${colors.yellow}[BYE] ${msg}${colors.reset}`),
+    critical: (msg) => console.log(`${colors.bgRed}${colors.white}${colors.bright}[CRITICAL] ${msg}${colors.reset}`),
+    summary: (msg) => console.log(`${colors.lightGreen}${colors.bright}[SUMMARY] ${msg}${colors.reset}`),
+    section: (msg) => {
+        const line = '─'.repeat(50);
+        console.log(`\n${colors.lightCyan}${line}${colors.reset}`);
+        if (msg) console.log(`${colors.lightCyan}${colors.bright}${msg}${colors.reset}`);
+        console.log(`${colors.lightCyan}${line}${colors.reset}\n`);
     },
-    banner: () => fancyBox(' 🍉🍉 Free Plestine 🍉🍉', '— 19Seniman From Insider 🏴‍☠️ —'),
+    banner: () => {
+        const bannerText = `
+${colors.lightGreen}============================================
+${colors.lightGreen}         🍉 0G.ai - Storage 🍉
+${colors.lightGreen}         Coded by 19Seniman
+${colors.lightGreen}         From Insider
+${colors.lightGreen}============================================${colors.reset}
+`;
+        console.log(bannerText);
+    },
+    step: (msg) => console.log(`${colors.white}├── ${msg}${colors.reset}`),
+    subStep: (msg) => console.log(`${colors.gray}│   └── ${msg}${colors.reset}`),
 };
-
 
 const CHAIN_ID = 16601;
 const RPC_URL = 'https://evmrpc-testnet.0g.ai';
@@ -72,17 +90,18 @@ const PROXY_FILE = 'proxies.txt';
 
 let privateKeys = [];
 
-// --- PERBAIKAN: Menyederhanakan fungsi loadPrivateKeys ---
 function loadPrivateKeys() {
     const keys = Object.keys(process.env).filter(k => k.startsWith('PRIVATE_KEY'));
     if (keys.length === 0) {
         logger.critical('No private keys found in .env file. Name them PRIVATE_KEY, PRIVATE_KEY_1, etc.');
+        process.exit(1); // Exit if no keys are found
     }
 
-    privateKeys = keys.map(k => process.env[k]).filter(Boolean); // Filter nilai yang kosong
+    privateKeys = keys.map(k => process.env[k]).filter(Boolean); // Filter empty values
 
     if (privateKeys.length === 0) {
         logger.critical('Private keys are defined but empty in .env file.');
+        process.exit(1); // Exit if keys are empty
     }
 
     logger.success(`Loaded ${privateKeys.length} private key(s) from .env file`);
@@ -151,15 +170,16 @@ const provider = new ethers.JsonRpcProvider(RPC_URL);
 
 async function getGasPrice() {
     try {
+        logger.subStep('Fetching current gas prices...');
         const feeData = await provider.getFeeData();
-        // Menambahkan buffer 10% untuk memastikan transaksi tidak gagal karena gas rendah
+        // Add a 10% buffer to ensure transactions don't fail due to low gas
         const maxFeePerGas = (feeData.maxFeePerGas * 110n) / 100n;
         const maxPriorityFeePerGas = (feeData.maxPriorityFeePerGas * 110n) / 100n;
-
+        logger.subStep(`Gas prices fetched: MaxFee: ${ethers.formatUnits(maxFeePerGas, "gwei")} Gwei, PriorityFee: ${ethers.formatUnits(maxPriorityFeePerGas, "gwei")} Gwei`);
         return { maxFeePerGas, maxPriorityFeePerGas };
     } catch (error) {
         logger.error(`Error getting gas price: ${error.message}. Using fallback values.`);
-        // Fallback jika RPC gagal memberikan data gas
+        // Fallback if RPC fails to provide gas data
         return {
             maxFeePerGas: ethers.parseUnits("0.1", "gwei"),
             maxPriorityFeePerGas: ethers.parseUnits("0.1", "gwei")
@@ -169,12 +189,12 @@ async function getGasPrice() {
 
 async function fetchRandomImage() {
     try {
-        logger.loading('Fetching random image...');
+        logger.subStep('Fetching random image from picsum.photos...');
         const axiosInstance = createAxiosInstance();
         const response = await axiosInstance.get('https://picsum.photos/800/600', {
             responseType: 'arraybuffer'
         });
-        logger.success('Random image fetched successfully.');
+        logger.subStep('Random image fetched successfully.');
         return response.data;
     } catch (error) {
         logger.error(`Error fetching image: ${error.message}`);
@@ -183,34 +203,36 @@ async function fetchRandomImage() {
 }
 
 async function prepareImageData(imageBuffer) {
+    logger.subStep('Generating SHA256 hash for the image...');
     const hash = '0x' + crypto.createHash('sha256').update(imageBuffer).digest('hex');
-    logger.success(`Generated file hash: ${hash}`);
+    logger.subStep(`Generated file hash: ${hash}`);
+    logger.subStep('Converting image to Base64...');
     const imageBase64 = Buffer.from(imageBuffer).toString('base64');
+    logger.subStep('Image data prepared.');
     return { root: hash, data: imageBase64 };
 }
 
-// --- PERBAIKAN TOTAL: Membuat fungsi encodeTransactionData menjadi dinamis ---
 function encodeTransactionData(fileRoot) {
-    // Method ID untuk fungsi 'submit' adalah 0xef3e12dc
+    // Method ID for the 'submit' function is 0xef3e12dc
     const methodId = '0xef3e12dc';
 
-    // Tipe data parameter sesuai dengan yang diharapkan oleh kontrak
+    // Parameter types as expected by the contract
     // (bytes32, bytes, bytes, bytes)
     const paramTypes = ['bytes32', 'bytes', 'bytes', 'bytes'];
 
-    // Nilai-nilai parameter. Kita hanya perlu fileRoot, yang lain bisa kosong.
+    // Parameter values. We only need fileRoot, others can be empty.
     const params = [
-        fileRoot, // fileRoot yang sebenarnya
-        '0x',     // proof (kosong)
-        '0x',     // data (kosong)
-        '0x'      // vm-related data (kosong)
+        fileRoot,   // The actual fileRoot
+        '0x',       // proof (empty)
+        '0x',       // data (empty)
+        '0x'        // vm-related data (empty)
     ];
 
-    // Menggunakan AbiCoder dari ethers untuk meng-encode parameter dengan benar
+    // Use AbiCoder from ethers to correctly encode parameters
     const abiCoder = AbiCoder.defaultAbiCoder();
     const encodedParams = abiCoder.encode(paramTypes, params);
 
-    // Menggabungkan methodId dengan parameter yang sudah di-encode
+    // Concatenate methodId with encoded parameters
     return ethers.concat([methodId, encodedParams]);
 }
 
@@ -225,14 +247,13 @@ async function uploadToStorage(imageData, wallet, walletIndex) {
                 root: imageData.root,
                 index: 0,
                 data: imageData.data,
-                proof: null // Proof bisa null sesuai dokumentasi
+                proof: null // Proof can be null as per documentation
             });
 
             logger.success(`[Wallet ${walletIndex + 1}] Segment uploaded. Submitting transaction...`);
 
-            // --- PERBAIKAN: Menggunakan fungsi encode yang sudah diperbaiki ---
             const data = encodeTransactionData(imageData.root);
-            
+
             logger.loading(`[Wallet ${walletIndex + 1}] Getting gas prices and estimating gas...`);
             const gasPrice = await getGasPrice();
             const gasEstimate = await provider.estimateGas({
@@ -241,11 +262,10 @@ async function uploadToStorage(imageData, wallet, walletIndex) {
                 from: wallet.address
             });
 
-            // Memberikan buffer 20% pada estimasi gas
+            // Add a 20% buffer to the gas estimate
             const gasLimit = (gasEstimate * 120n) / 100n;
             logger.success(`[Wallet ${walletIndex + 1}] Gas estimated: ${gasLimit} units. Sending transaction...`);
-            
-            // --- PERBAIKAN: Menghapus manajemen nonce manual ---
+
             const tx = await wallet.sendTransaction({
                 to: CONTRACT_ADDRESS,
                 data,
@@ -254,12 +274,12 @@ async function uploadToStorage(imageData, wallet, walletIndex) {
                 maxPriorityFeePerGas: gasPrice.maxPriorityFeePerGas
             });
 
-            logger.info(`[Wallet ${walletIndex + 1}] Transaction sent! Hash: ${tx.hash}`);
+            logger.info(`[Wallet ${walletIndex + 1}] Transaction sent! Hash: ${colors.underscore}${tx.hash}${colors.reset}`);
             logger.loading('Waiting for confirmation...');
             const receipt = await tx.wait();
-            
+
             if (receipt.status === 0) {
-                 throw new Error(`Transaction failed! Receipt: ${JSON.stringify(receipt)}`);
+                throw new Error(`Transaction failed! Receipt: ${JSON.stringify(receipt)}`);
             }
 
             logger.success(`Transaction confirmed in block ${receipt.blockNumber}`);
@@ -269,7 +289,7 @@ async function uploadToStorage(imageData, wallet, walletIndex) {
         } catch (error) {
             logger.error(`[Wallet ${walletIndex + 1}] Attempt ${attempt}/${MAX_RETRIES} failed: ${error.message}`);
             if (attempt === MAX_RETRIES) {
-                logger.error(`All retry attempts failed for wallet ${wallet.address}.`);
+                logger.critical(`All retry attempts failed for wallet ${wallet.address}.`);
                 throw error;
             }
             logger.loading(`Waiting for 5 seconds before retrying...`);
@@ -296,15 +316,15 @@ function saveTransactionResult(txData) {
 async function main() {
     try {
         logger.banner();
+        logger.process('Initializing Setup');
         loadPrivateKeys();
         loadProxies();
 
-        console.log(colors.cyan + "Available wallets:" + colors.reset);
+        logger.info("Available wallets:");
         privateKeys.forEach((key, index) => {
             const wallet = new ethers.Wallet(key);
-            console.log(`${colors.green}[${index + 1}]${colors.reset} ${colors.yellow}${wallet.address}${colors.reset}`);
+            logger.info(`  [${index + 1}] ${colors.yellow}${wallet.address}${colors.reset}`);
         });
-        console.log();
 
         rl.question('How many files to upload per wallet? ', async (countInput) => {
             const count = parseInt(countInput);
@@ -324,7 +344,7 @@ async function main() {
             for (let walletIndex = 0; walletIndex < privateKeys.length; walletIndex++) {
                 const privateKey = privateKeys[walletIndex];
                 const wallet = new ethers.Wallet(privateKey, provider);
-                logger.info(`${colors.bold}--- Starting uploads for wallet #${walletIndex + 1} [${wallet.address}] ---${colors.reset}`);
+                logger.process(`Starting uploads for Wallet #${walletIndex + 1} [${wallet.address}]`);
 
                 for (let i = 1; i <= count; i++) {
                     const uploadNumber = (walletIndex * count) + i;
@@ -345,7 +365,6 @@ async function main() {
                             status: 'success'
                         };
                         saveTransactionResult(result);
-                        successful++;
                         logger.success(`Upload #${uploadNumber} completed successfully!`);
 
                     } catch (error) {
@@ -360,7 +379,7 @@ async function main() {
                         saveTransactionResult(result);
                         logger.error(`Upload #${uploadNumber} failed.`);
                     }
-                    
+
                     if (i < count) {
                         logger.loading('Waiting 5 seconds before next upload for this wallet...');
                         await delay(5000);
@@ -373,15 +392,16 @@ async function main() {
                 }
             }
 
-            console.log();
-            logger.info('--- Upload Session Summary ---');
-            logger.info(`Total wallets: ${privateKeys.length}`);
-            logger.info(`Uploads per wallet: ${count}`);
-            logger.success(`Successful uploads: ${successful}`);
+            logger.section('Upload Session Summary');
+            logger.summary(`Total wallets processed: ${privateKeys.length}`);
+            logger.summary(`Uploads per wallet requested: ${count}`);
+            logger.summary(`Total successful uploads: ${successful}`);
             if (failed > 0) {
-                logger.error(`Failed uploads: ${failed}`);
+                logger.critical(`Total failed uploads: ${failed}`);
+            } else {
+                logger.success('All uploads completed without any failures!');
             }
-            logger.success('All operations completed!');
+            logger.bye('Script finished. Thank you for using!');
             rl.close();
         });
     } catch (error) {
