@@ -1,330 +1,516 @@
 require('dotenv').config();
-const { ethers, AbiCoder } = require('ethers');
+const { ethers } = require('ethers');
 const axios = require('axios');
 const readline = require('readline');
 const crypto = require('crypto');
 const fs = require('fs');
 const { HttpsProxyAgent } = require('https-proxy-agent');
-const path = require('path');
+
+const colors = {
+  reset: "\x1b[0m",
+  cyan: "\x1b[36m",
+  green: "\x1b[32m",
+  yellow: "\x1b[33m",
+  red: "\x1b[31m",
+  white: "\x1b[37m",
+  gray: "\x1b[90m",
+  bold: "\x1b[1m"
+};
+
+const logger = {
+  info: (msg) => console.log(`${colors.green}[✓] ${msg}${colors.reset}`),
+  warn: (msg) => console.log(`${colors.yellow}[⚠] ${msg}${colors.reset}`),
+  error: (msg) => console.log(`${colors.red}[✗] ${msg}${colors.reset}`),
+  success: (msg) => console.log(`${colors.green}[✅] ${msg}${colors.reset}`),
+  loading: (msg) => console.log(`${colors.cyan}[⟳] ${msg}${colors.reset}`),
+  process: (msg) => console.log(`\n${colors.white}[➤] ${msg}${colors.reset}`),
+  debug: (msg) => console.log(`${colors.gray}[…] ${msg}${colors.reset}`),
+  bye: (msg) => console.log(`${colors.yellow}[…] ${msg}${colors.reset}`),
+  critical: (msg) => console.log(`${colors.red}${colors.bold}[❌] ${msg}${colors.reset}`),
+  summary: (msg) => console.log(`${colors.white}[✓] ${msg}${colors.reset}`),
+  section: (msg) => {
+    const line = '='.repeat(50);
+    console.log(`\n${colors.cyan}${line}${colors.reset}`);
+    if (msg) console.log(`${colors.cyan}${msg}${colors.reset}`);
+    console.log(`${colors.cyan}${line}${colors.reset}\n`);
+  },
+  banner: () => {
+    console.log(`${colors.cyan}${colors.bold}`);
+    console.log(`--------------------------------------------`);
+    console.log(` 0G Storage Scan Auto Bot - Airdrop Insiders`);
+    console.log(`--------------------------------------------${colors.reset}\n`);
+  }
+};
 
 const CHAIN_ID = 16601;
 const RPC_URL = 'https://evmrpc-testnet.0g.ai';
-const CONTRACT_ADDRESS = '0x5f1D96895e442FC0168FA2F9fb1EBeF93Cb5035e';
+const CONTRACT_ADDRESS = '0x5f1d96895e442fc0168fa2f9fb1ebef93cb5035e';
+const METHOD_ID = '0xef3e12dc';
 const PROXY_FILE = 'proxies.txt';
+const INDEXER_URL = 'https://indexer-storage-testnet-turbo.0g.ai';
+const EXPLORER_URL = 'https://chainscan-galileo.0g.ai/tx/';
+
+const IMAGE_SOURCES = [
+  { url: 'https://picsum.photos/800/600', responseType: 'arraybuffer' },
+  { url: 'https://loremflickr.com/800/600', responseType: 'arraybuffer' }
+];
 
 let privateKeys = [];
+let currentKeyIndex = 0;
+
+const isEthersV6 = ethers.version.startsWith('6');
+const parseUnits = isEthersV6 ? ethers.parseUnits : ethers.utils.parseUnits;
+const parseEther = isEthersV6 ? ethers.parseEther : ethers.utils.parseEther;
+const formatEther = isEthersV6 ? ethers.formatEther : ethers.utils.formatEther;
+
+const provider = isEthersV6
+  ? new ethers.JsonRpcProvider(RPC_URL)
+  : new ethers.providers.JsonRpcProvider(RPC_URL);
 
 function loadPrivateKeys() {
-    const keys = Object.keys(process.env).filter(k => k.startsWith('PRIVATE_KEY'));
-    if (keys.length === 0) {
-        logger.critical('No private keys found in .env file. Name them PRIVATE_KEY, PRIVATE_KEY_1, etc.');
-        process.exit(1);
+  try {
+    let index = 1;
+    let key = process.env[`PRIVATE_KEY_${index}`];
+
+    if (!key && index === 1 && process.env.PRIVATE_KEY) {
+      key = process.env.PRIVATE_KEY;
     }
 
-    privateKeys = keys.map(k => process.env[k]).filter(Boolean);
+    while (key) {
+      if (isValidPrivateKey(key)) {
+        privateKeys.push(key);
+      } else {
+        logger.error(`Invalid private key at PRIVATE_KEY_${index}`);
+      }
+      index++;
+      key = process.env[`PRIVATE_KEY_${index}`];
+    }
 
     if (privateKeys.length === 0) {
-        logger.critical('Private keys are defined but empty in .env file.');
-        process.exit(1);
+      logger.critical('No valid private keys found in .env file');
+      process.exit(1);
     }
 
-    logger.success(`Loaded ${privateKeys.length} private key(s) from .env file`);
+    logger.success(`Loaded ${privateKeys.length} private key(s)`);
+  } catch (error) {
+    logger.critical(`Failed to load private keys: ${error.message}`);
+    process.exit(1);
+  }
+}
+
+function isValidPrivateKey(key) {
+  key = key.trim();
+  if (!key.startsWith('0x')) key = '0x' + key;
+  try {
+    const bytes = Buffer.from(key.replace('0x', ''), 'hex');
+    return key.length === 66 && bytes.length === 32;
+  } catch (error) {
+    return false;
+  }
+}
+
+function getNextPrivateKey() {
+  return privateKeys[currentKeyIndex];
+}
+
+function rotatePrivateKey() {
+  currentKeyIndex = (currentKeyIndex + 1) % privateKeys.length;
+  return privateKeys[currentKeyIndex];
 }
 
 function getRandomUserAgent() {
-    const userAgents = [
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Safari/605.1.15',
-        'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
-    ];
-    return userAgents[Math.floor(Math.random() * userAgents.length)];
+  const userAgents = [
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Safari/605.1.15',
+    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:125.0) Gecko/20100101 Firefox/125.0',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:124.0) Gecko/20100101 Firefox/124.0',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36 Edg/122.0.0.0',
+    'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+    'Mozilla/5.0 (iPad; CPU OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/122.0.6261.89 Mobile/15E148 Safari/604.1',
+    'Mozilla/5.0 (Linux; Android 14; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.6261.119 Mobile Safari/537.36',
+    'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.6261.119 Mobile Safari/537.36'
+  ];
+  return userAgents[Math.floor(Math.random() * userAgents.length)];
 }
 
 let proxies = [];
 let currentProxyIndex = 0;
 
 function loadProxies() {
-    try {
-        if (fs.existsSync(PROXY_FILE)) {
-            const data = fs.readFileSync(PROXY_FILE, 'utf8');
-            proxies = data.split('\n')
-                .map(line => line.trim())
-                .filter(line => line && !line.startsWith('#'));
+  try {
+    if (fs.existsSync(PROXY_FILE)) {
+      const data = fs.readFileSync(PROXY_FILE, 'utf8');
+      proxies = data.split('\n')
+        .map(line => line.trim())
+        .filter(line => line && !line.startsWith('#'));
 
-            if (proxies.length > 0) {
-                logger.info(`Loaded ${proxies.length} proxies from ${PROXY_FILE}`);
-            } else {
-                logger.warn(`No proxies found in ${PROXY_FILE}, proceeding without proxies.`);
-            }
-        } else {
-            logger.warn(`Proxy file ${PROXY_FILE} not found, proceeding without proxies.`);
-        }
-    } catch (error) {
-        logger.error(`Failed to load proxies: ${error.message}`);
+      if (proxies.length > 0) {
+        logger.info(`Loaded ${proxies.length} proxies from ${PROXY_FILE}`);
+      } else {
+        logger.warn(`No proxies found in ${PROXY_FILE}`);
+      }
+    } else {
+      logger.warn(`Proxy file ${PROXY_FILE} not found`);
     }
+  } catch (error) {
+    logger.error(`Failed to load proxies: ${error.message}`);
+  }
 }
 
 function getNextProxy() {
-    if (proxies.length === 0) return null;
-    const proxy = proxies[currentProxyIndex];
-    currentProxyIndex = (currentProxyIndex + 1) % proxies.length;
-    return proxy;
+  if (proxies.length === 0) return null;
+  const proxy = proxies[currentProxyIndex];
+  currentProxyIndex = (currentProxyIndex + 1) % proxies.length;
+  return proxy;
+}
+
+function extractProxyIP(proxy) {
+  try {
+    let cleanProxy = proxy.replace(/^https?:\/\//, '').replace(/.*@/, '');
+    const ip = cleanProxy.split(':')[0];
+    return ip || cleanProxy;
+  } catch (error) {
+    return proxy; 
+  }
 }
 
 function createAxiosInstance() {
-    const config = {
-        headers: {
-            'User-Agent': getRandomUserAgent()
-        }
-    };
-    const proxy = getNextProxy();
-    if (proxy) {
-        logger.debug(`Using proxy: ${proxy}`);
-        config.httpsAgent = new HttpsProxyAgent(proxy);
+  const config = {
+    headers: {
+      'User-Agent': getRandomUserAgent(),
+      'accept': 'application/json, text/plain, */*',
+      'accept-language': 'en-US,en;q=0.8',
+      'sec-fetch-dest': 'empty',
+      'sec-fetch-mode': 'cors',
+      'sec-fetch-site': 'same-site',
+      'sec-gpc': '1',
+      'Referer': 'https://storagescan-galileo.0g.ai/',
+      'Referrer-Policy': 'strict-origin-when-cross-origin'
     }
-    return axios.create(config);
+  };
+
+  const proxy = getNextProxy();
+  if (proxy) {
+    const proxyIP = extractProxyIP(proxy);
+    logger.debug(`Using proxy IP: ${proxyIP}`);
+    config.httpsAgent = new HttpsProxyAgent(proxy);
+  }
+
+  return axios.create(config);
 }
 
 const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout
+  input: process.stdin,
+  output: process.stdout
 });
 
-const provider = new ethers.JsonRpcProvider(RPC_URL);
+function initializeWallet() {
+  const privateKey = getNextPrivateKey();
+  return new ethers.Wallet(privateKey, provider);
+}
 
-async function getGasPrice() {
-    try {
-        logger.subStep('Fetching current gas prices...');
-        const feeData = await provider.getFeeData();
-        const maxFeePerGas = (feeData.maxFeePerGas * 110n) / 100n;
-        const maxPriorityFeePerGas = (feeData.maxPriorityFeePerGas * 110n) / 100n;
-        logger.subStep(`Gas prices fetched: MaxFee: ${ethers.formatUnits(maxFeePerGas, "gwei")} Gwei, PriorityFee: ${ethers.formatUnits(maxPriorityFeePerGas, "gwei")} Gwei`);
-        return { maxFeePerGas, maxPriorityFeePerGas };
-    } catch (error) {
-        logger.error(`Error getting gas price: ${error.message}. Using fallback values.`);
-        return {
-            maxFeePerGas: ethers.parseUnits("0.1", "gwei"),
-            maxPriorityFeePerGas: ethers.parseUnits("0.1", "gwei")
-        };
-    }
+async function checkNetworkSync() {
+  try {
+    logger.loading('Checking network sync...');
+    const blockNumber = await provider.getBlockNumber();
+    logger.success(`Network synced at block ${blockNumber}`);
+    return true;
+  } catch (error) {
+    logger.error(`Network sync check failed: ${error.message}`);
+    return false;
+  }
 }
 
 async function fetchRandomImage() {
-    try {
-        logger.subStep('Fetching random image from picsum.photos...');
-        const axiosInstance = createAxiosInstance();
-        const response = await axiosInstance.get('https://picsum.photos/800/600', {
-            responseType: 'arraybuffer'
-        });
-        logger.subStep('Random image fetched successfully.');
-        return response.data;
-    } catch (error) {
-        logger.error(`Error fetching image: ${error.message}`);
-        throw error;
-    }
+  try {
+    logger.loading('Fetching random image...');
+    const axiosInstance = createAxiosInstance();
+    const source = IMAGE_SOURCES[Math.floor(Math.random() * IMAGE_SOURCES.length)];
+    const response = await axiosInstance.get(source.url, {
+      responseType: source.responseType,
+      maxRedirects: 5
+    });
+    logger.success('Image fetched successfully');
+    return response.data;
+  } catch (error) {
+    logger.error(`Error fetching image: ${error.message}`);
+    throw error;
+  }
+}
+
+async function checkFileExists(fileHash) {
+  try {
+    logger.loading(`Checking file hash ${fileHash}...`);
+    const axiosInstance = createAxiosInstance();
+    const response = await axiosInstance.get(`${INDEXER_URL}/file/info/${fileHash}`);
+    return response.data.exists || false;
+  } catch (error) {
+    logger.warn(`Failed to check file hash: ${error.message}`);
+    return false;
+  }
 }
 
 async function prepareImageData(imageBuffer) {
-    logger.subStep('Generating SHA256 hash for the image...');
-    const hash = '0x' + crypto.createHash('sha256').update(imageBuffer).digest('hex');
-    logger.subStep(`Generated file hash: ${hash}`);
-    logger.subStep('Converting image to Base64...');
-    const imageBase64 = Buffer.from(imageBuffer).toString('base64');
-    logger.subStep('Image data prepared.');
-    return { root: hash, data: imageBase64 };
-}
+  const MAX_HASH_ATTEMPTS = 5;
+  let attempt = 1;
 
-function encodeTransactionData(fileRoot) {
-    const methodId = '0xef3e12dc';
-    const paramTypes = ['bytes32', 'bytes', 'bytes', 'bytes'];
-    const params = [
-        fileRoot,
-        '0x',
-        '0x',
-        '0x'
-    ];
-    const abiCoder = AbiCoder.defaultAbiCoder();
-    const encodedParams = abiCoder.encode(paramTypes, params);
-    return ethers.concat([methodId, encodedParams]);
+  while (attempt <= MAX_HASH_ATTEMPTS) {
+    try {
+      const salt = crypto.randomBytes(16).toString('hex');
+      const timestamp = Date.now().toString();
+      const hashInput = Buffer.concat([
+        Buffer.from(imageBuffer),
+        Buffer.from(salt),
+        Buffer.from(timestamp)
+      ]);
+      const hash = '0x' + crypto.createHash('sha256').update(hashInput).digest('hex');
+      const fileExists = await checkFileExists(hash);
+      if (fileExists) {
+        logger.warn(`Hash ${hash} already exists, retrying...`);
+        attempt++;
+        continue;
+      }
+      const imageBase64 = Buffer.from(imageBuffer).toString('base64');
+      logger.success(`Generated unique file hash: ${hash}`);
+      return {
+        root: hash,
+        data: imageBase64
+      };
+    } catch (error) {
+      logger.error(`Error generating hash (attempt ${attempt}): ${error.message}`);
+      attempt++;
+      if (attempt > MAX_HASH_ATTEMPTS) {
+        throw new Error(`Failed to generate unique hash after ${MAX_HASH_ATTEMPTS} attempts`);
+      }
+    }
+  }
 }
 
 async function uploadToStorage(imageData, wallet, walletIndex) {
-    const MAX_RETRIES = 3;
-    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-        try {
-            logger.loading(`[Wallet ${walletIndex + 1}] Uploading file segment to indexer (Attempt ${attempt})...`);
-            const axiosInstance = createAxiosInstance();
-            await axiosInstance.post('https://indexer-storage-testnet-turbo.0g.ai/file/segment', {
-                root: imageData.root,
-                index: 0,
-                data: imageData.data,
-                proof: null
-            });
+  const MAX_RETRIES = 3;
+  const TIMEOUT_SECONDS = 300;
+  let attempt = 1;
 
-            logger.success(`[Wallet ${walletIndex + 1}] Segment uploaded. Submitting transaction...`);
+  logger.loading(`Checking wallet balance for ${wallet.address}...`);
+  const balance = await provider.getBalance(wallet.address);
+  const minBalance = parseEther('0.0015');
+  if (BigInt(balance) < BigInt(minBalance)) {
+    throw new Error(`Insufficient balance: ${formatEther(balance)} OG`);
+  }
+  logger.success(`Wallet balance: ${formatEther(balance)} OG`);
 
-            const data = encodeTransactionData(imageData.root);
-
-            logger.loading(`[Wallet ${walletIndex + 1}] Getting gas prices and estimating gas...`);
-            const gasPrice = await getGasPrice();
-            const gasEstimate = await provider.estimateGas({
-                to: CONTRACT_ADDRESS,
-                data,
-                from: wallet.address
-            });
-
-            const gasLimit = (gasEstimate * 120n) / 100n;
-            logger.success(`[Wallet ${walletIndex + 1}] Gas estimated: ${gasLimit} units. Sending transaction...`);
-
-            const tx = await wallet.sendTransaction({
-                to: CONTRACT_ADDRESS,
-                data,
-                gasLimit: gasLimit,
-                maxFeePerGas: gasPrice.maxFeePerGas,
-                maxPriorityFeePerGas: gasPrice.maxPriorityFeePerGas
-            });
-
-            logger.info(`[Wallet ${walletIndex + 1}] Transaction sent! Hash: ${colors.underscore}${tx.hash}${colors.reset}`);
-            logger.loading('Waiting for confirmation...');
-            const receipt = await tx.wait();
-
-            if (receipt.status === 0) {
-                throw new Error(`Transaction failed! Receipt: ${JSON.stringify(receipt)}`);
-            }
-
-            logger.success(`Transaction confirmed in block ${receipt.blockNumber}`);
-            logger.success(`File uploaded with root hash: ${imageData.root}`);
-            return receipt;
-
-        } catch (error) {
-            logger.error(`[Wallet ${walletIndex + 1}] Attempt ${attempt}/${MAX_RETRIES} failed: ${error.message}`);
-            if (attempt === MAX_RETRIES) {
-                logger.critical(`All retry attempts failed for wallet ${wallet.address}.`);
-                throw error;
-            }
-            logger.loading(`Waiting for 5 seconds before retrying...`);
-            await new Promise(resolve => setTimeout(resolve, 5000));
-        }
-    }
-}
-
-function saveTransactionResult(txData) {
+  while (attempt <= MAX_RETRIES) {
     try {
-        const resultsDir = 'results';
-        if (!fs.existsSync(resultsDir)) {
-            fs.mkdirSync(resultsDir);
+      logger.loading(`Uploading file for wallet #${walletIndex + 1} [${wallet.address}] (Attempt ${attempt}/${MAX_RETRIES})...`);
+      const axiosInstance = createAxiosInstance();
+      await axiosInstance.post(`${INDEXER_URL}/file/segment`, {
+        root: imageData.root,
+        index: 0,
+        data: imageData.data,
+        proof: {
+          siblings: [imageData.root],
+          path: []
         }
-        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-        const filePath = path.join(resultsDir, `tx-${timestamp}.json`);
-        fs.writeFileSync(filePath, JSON.stringify(txData, null, 2));
-        logger.debug(`Transaction details saved to ${filePath}`);
+      }, {
+        headers: {
+          'content-type': 'application/json'
+        }
+      });
+      logger.success('File segment uploaded');
+
+      const contentHash = crypto.randomBytes(32);
+      const data = ethers.concat([
+        Buffer.from(METHOD_ID.slice(2), 'hex'),
+        Buffer.from('0000000000000000000000000000000000000000000000000000000000000020', 'hex'),
+        Buffer.from('0000000000000000000000000000000000000000000000000000000000000014', 'hex'),
+        Buffer.from('0000000000000000000000000000000000000000000000000000000000000060', 'hex'),
+        Buffer.from('0000000000000000000000000000000000000000000000000000000000000080', 'hex'),
+        Buffer.from('0000000000000000000000000000000000000000000000000000000000000000', 'hex'),
+        Buffer.from('0000000000000000000000000000000000000000000000000000000000000001', 'hex'),
+        contentHash,
+        Buffer.from('0000000000000000000000000000000000000000000000000000000000000000', 'hex')
+      ]);
+
+      const value = parseEther('0.000839233398436224');
+      const gasPrice = parseUnits('1.029599997', 'gwei');
+
+      logger.loading('Estimating gas...');
+      let gasLimit;
+      try {
+        const gasEstimate = await provider.estimateGas({
+          to: CONTRACT_ADDRESS,
+          data,
+          from: wallet.address,
+          value
+        });
+        gasLimit = BigInt(gasEstimate) * 15n / 10n;
+        logger.success(`Gas limit set: ${gasLimit}`);
+      } catch (error) {
+        gasLimit = 300000n;
+        logger.warn(`Gas estimation failed, using default: ${gasLimit}`);
+      }
+
+      const gasCost = BigInt(gasPrice) * gasLimit;
+      const requiredBalance = gasCost + BigInt(value);
+      if (BigInt(balance) < requiredBalance) {
+        throw new Error(`Insufficient balance for transaction: ${formatEther(balance)} OG`);
+      }
+
+      logger.loading('Sending transaction...');
+      const nonce = await provider.getTransactionCount(wallet.address, 'latest');
+      const txParams = {
+        to: CONTRACT_ADDRESS,
+        data,
+        value,
+        nonce,
+        chainId: CHAIN_ID,
+        gasPrice,
+        gasLimit
+      };
+
+      const tx = await wallet.sendTransaction(txParams);
+      const txLink = `${EXPLORER_URL}${tx.hash}`;
+      logger.info(`Transaction sent: ${tx.hash}`);
+      logger.info(`Explorer: ${txLink}`);
+
+      logger.loading(`Waiting for confirmation (${TIMEOUT_SECONDS}s)...`);
+      let receipt;
+      try {
+        receipt = await Promise.race([
+          tx.wait(),
+          new Promise((_, reject) => setTimeout(() => reject(new Error(`Timeout after ${TIMEOUT_SECONDS} seconds`)), TIMEOUT_SECONDS * 1000))
+        ]);
+      } catch (error) {
+        if (error.message.includes('Timeout')) {
+          logger.warn(`Transaction timeout after ${TIMEOUT_SECONDS}s`);
+          receipt = await provider.getTransactionReceipt(tx.hash);
+          if (receipt && receipt.status === 1) {
+            logger.success(`Late confirmation in block ${receipt.blockNumber}`);
+          } else {
+            throw new Error(`Transaction failed or pending: ${txLink}`);
+          }
+        } else {
+          throw error;
+        }
+      }
+
+      if (receipt.status === 1) {
+        logger.success(`Transaction confirmed in block ${receipt.blockNumber}`);
+        logger.success(`File uploaded, root hash: ${imageData.root}`);
+        return receipt;
+      } else {
+        throw new Error(`Transaction failed: ${txLink}`);
+      }
     } catch (error) {
-        logger.error(`Failed to save transaction results: ${error.message}`);
+      logger.error(`Upload attempt ${attempt} failed: ${error.message}`);
+      if (attempt < MAX_RETRIES) {
+        const delay = 10 + Math.random() * 20;
+        logger.warn(`Retrying after ${delay.toFixed(2)}s...`);
+        await new Promise(resolve => setTimeout(resolve, delay * 1000));
+        attempt++;
+        continue;
+      }
+      throw error;
     }
+  }
 }
 
 async function main() {
-    try {
-        logger.banner();
-        logger.process('Initializing Setup');
-        loadPrivateKeys();
-        loadProxies();
+  try {
+    logger.banner();
+    loadPrivateKeys();
+    loadProxies();
 
-        logger.info("Available wallets:");
-        privateKeys.forEach((key, index) => {
-            const wallet = new ethers.Wallet(key);
-            logger.info(`  [${index + 1}] ${colors.yellow}${wallet.address}${colors.reset}`);
-        });
-
-        rl.question('How many files to upload per wallet? ', async (countInput) => {
-            const count = parseInt(countInput);
-            if (isNaN(count) || count <= 0) {
-                logger.error('Please enter a valid number greater than 0.');
-                rl.close();
-                return;
-            }
-
-            const totalUploads = count * privateKeys.length;
-            logger.info(`Starting upload process for ${count} files per wallet (${totalUploads} total uploads).`);
-
-            const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
-            let successful = 0;
-            let failed = 0;
-
-            for (let walletIndex = 0; walletIndex < privateKeys.length; walletIndex++) {
-                const privateKey = privateKeys[walletIndex];
-                const wallet = new ethers.Wallet(privateKey, provider);
-                logger.process(`Starting uploads for Wallet #${walletIndex + 1} [${wallet.address}]`);
-
-                for (let i = 1; i <= count; i++) {
-                    const uploadNumber = (walletIndex * count) + i;
-                    logger.step(`Processing upload ${uploadNumber} of ${totalUploads} (Wallet #${walletIndex + 1}, Upload #${i})`);
-
-                    try {
-                        const imageBuffer = await fetchRandomImage();
-                        const imageData = await prepareImageData(imageBuffer);
-                        const receipt = await uploadToStorage(imageData, wallet, walletIndex);
-
-                        const result = {
-                            walletIndex: walletIndex + 1,
-                            walletAddress: wallet.address,
-                            uploadIndex: i,
-                            txHash: receipt.hash,
-                            blockNumber: receipt.blockNumber,
-                            fileHash: imageData.root,
-                            status: 'success'
-                        };
-                        saveTransactionResult(result);
-                        logger.success(`Upload #${uploadNumber} completed successfully!`);
-
-                    } catch (error) {
-                        failed++;
-                        const result = {
-                            walletIndex: walletIndex + 1,
-                            walletAddress: wallet.address,
-                            uploadIndex: i,
-                            error: error.message,
-                            status: 'failed'
-                        };
-                        saveTransactionResult(result);
-                        logger.error(`Upload #${uploadNumber} failed.`);
-                    }
-
-                    if (i < count) {
-                        logger.loading('Waiting 5 seconds before next upload for this wallet...');
-                        await delay(5000);
-                    }
-                }
-
-                if (walletIndex < privateKeys.length - 1) {
-                    logger.loading(`All uploads for wallet #${walletIndex + 1} are done. Waiting 10 seconds before switching to the next wallet...`);
-                    await delay(10000);
-                }
-            }
-
-            logger.section('Upload Session Summary');
-            logger.summary(`Total wallets processed: ${privateKeys.length}`);
-            logger.summary(`Uploads per wallet requested: ${count}`);
-            logger.success(`Total successful uploads: ${successful}`);
-            if (failed > 0) {
-                logger.critical(`Total failed uploads: ${failed}`);
-            } else {
-                logger.success('All uploads completed without any failures!');
-            }
-            logger.bye('Script finished. Thank you for using!');
-            rl.close();
-        });
-    } catch (error) {
-        // Fallback yang lebih kuat jika logger.critical masih bermasalah
-        if (typeof logger === 'object' && typeof logger.critical === 'function') {
-            logger.critical(`A critical error occurred in the main process: ${error.message}`);
-        } else {
-            // Jika logger itu sendiri tidak terdefinisi atau critical bukan fungsi,
-            // langsung gunakan console.error dengan warna manual.
-            console.error(`\x1b[41m\x1b[37m\x1b[1m[CRITICAL ERROR] Script encountered an unhandled error: ${error.message}\x1b[0m`);
-        }
-        rl.close();
+    logger.loading('Checking network status...');
+    const network = await provider.getNetwork();
+    if (BigInt(network.chainId) !== BigInt(CHAIN_ID)) {
+      throw new Error(`Invalid chainId: expected ${CHAIN_ID}, got ${network.chainId}`);
     }
+    logger.success(`Connected to network: chainId ${network.chainId}`);
+
+    const isNetworkSynced = await checkNetworkSync();
+    if (!isNetworkSynced) {
+      throw new Error('Network is not synced');
+    }
+
+    console.log(colors.cyan + "Available wallets:" + colors.reset);
+    privateKeys.forEach((key, index) => {
+      const wallet = new ethers.Wallet(key);
+      console.log(`${colors.green}[${index + 1}]${colors.reset} ${wallet.address}`);
+    });
+    console.log();
+
+    rl.question('How many files to upload per wallet? ', async (count) => {
+      count = parseInt(count);
+      if (isNaN(count) || count <= 0) {
+        logger.error('Invalid number. Please enter a number greater than 0.');
+        rl.close();
+        process.exit(1);
+        return;
+      }
+
+      const totalUploads = count * privateKeys.length;
+      logger.info(`Starting ${totalUploads} uploads (${count} per wallet)`);
+
+      const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+      let successful = 0;
+      let failed = 0;
+
+      for (let walletIndex = 0; walletIndex < privateKeys.length; walletIndex++) {
+        currentKeyIndex = walletIndex;
+        const wallet = initializeWallet();
+        logger.section(`Processing Wallet #${walletIndex + 1} [${wallet.address}]`);
+
+        for (let i = 1; i <= count; i++) {
+          const uploadNumber = (walletIndex * count) + i;
+          logger.process(`Upload ${uploadNumber}/${totalUploads} (Wallet #${walletIndex + 1}, File #${i})`);
+
+          try {
+            const imageBuffer = await fetchRandomImage();
+            const imageData = await prepareImageData(imageBuffer);
+            await uploadToStorage(imageData, wallet, walletIndex);
+            successful++;
+            logger.success(`Upload ${uploadNumber} completed`);
+
+            if (uploadNumber < totalUploads) {
+              logger.loading('Waiting for next upload...');
+              await delay(3000);
+            }
+          } catch (error) {
+            failed++;
+            logger.error(`Upload ${uploadNumber} failed: ${error.message}`);
+            await delay(5000);
+          }
+        }
+
+        if (walletIndex < privateKeys.length - 1) {
+          logger.loading('Switching to next wallet...');
+          await delay(10000);
+        }
+      }
+
+      logger.section('Upload Summary');
+      logger.summary(`Total wallets: ${privateKeys.length}`);
+      logger.summary(`Uploads per wallet: ${count}`);
+      logger.summary(`Total attempted: ${totalUploads}`);
+      if (successful > 0) logger.success(`Successful: ${successful}`);
+      if (failed > 0) logger.error(`Failed: ${failed}`);
+      logger.success('All operations completed');
+
+      rl.close();
+      process.exit(0);
+    });
+
+    rl.on('close', () => {
+      logger.bye('Process completed ~ Bye bang !');
+    });
+
+  } catch (error) {
+    logger.critical(`Main process error: ${error.message}`);
+    rl.close();
+    process.exit(1);
+  }
 }
 
 main();
