@@ -7,7 +7,7 @@ const fs = require('fs');
 const { HttpsProxyAgent } = require('https-proxy-agent');
 const path = require('path');
 
-// --- Definisi Colors dan Logger yang Pasti Benar ---
+// --- Definisi Colors ---
 const colors = {
     reset: "\x1b[0m",
     bright: "\x1b[1m",
@@ -25,7 +25,7 @@ const colors = {
     magenta: "\x1b[35m",
     cyan: "\x1b[36m",
     white: "\x1b[37m",
-    gray: "\x1b[90m", // Light Black
+    gray: "\x1b[90m",
     lightRed: "\x1b[91m",
     lightGreen: "\x1b[92m",
     lightYellow: "\x1b[93m",
@@ -52,8 +52,9 @@ const colors = {
     bgLightWhite: "\x1b[107m",
 };
 
-// Definisikan logger setelah colors agar semua referensi warna pasti ada
+// --- Definisi Logger yang Lebih Robust ---
 const logger = {
+    // Menggunakan arrow function untuk semua metode dan memastikan binding ke console.log
     info: (msg) => console.log(`${colors.lightBlue}${colors.bright}[INFO]${colors.reset} ${msg}`),
     warn: (msg) => console.log(`${colors.yellow}${colors.bright}[WARN]${colors.reset} ${msg}`),
     error: (msg) => console.log(`${colors.red}${colors.bright}[ERROR]${colors.reset} ${msg}`),
@@ -70,16 +71,15 @@ const logger = {
         if (msg) console.log(`${colors.lightCyan}${colors.bright}${msg}${colors.reset}`);
         console.log(`${colors.lightCyan}${line}${colors.reset}\n`);
     },
-    // Perbaikan final untuk banner
     banner: () => {
-        // Menggunakan konstanta warna secara langsung untuk menghindari masalah 'undefined'
-        const line = `============================================`;
-        const supportText = `         🍉🍉PLEASE SUPPORT PALESTINE ON SOCIAL MEDIA 🍉🍉`;
-        const coderText = `         19Seniman from Insider`;
+        // Memecah baris-baris banner untuk memastikan warna diterapkan dengan benar
+        const line = "============================================";
+        const text1 = "         🍉🍉PLEASE SUPPORT PALESTINE ON SOCIAL MEDIA 🍉🍉";
+        const text2 = "         19Seniman from Insider";
 
         console.log(`\n${colors.lightGreen}${colors.bright}${line}${colors.reset}`);
-        console.log(`${colors.lightGreen}${colors.bright}${supportText}${colors.reset}`);
-        console.log(`${colors.lightGreen}${colors.bright}${coderText}${colors.reset}`);
+        console.log(`${colors.lightGreen}${colors.bright}${text1}${colors.reset}`);
+        console.log(`${colors.lightGreen}${colors.bright}${text2}${colors.reset}`);
         console.log(`${colors.lightGreen}${colors.bright}${line}${colors.reset}\n`);
     },
     step: (msg) => console.log(`${colors.white}├── ${msg}${colors.reset}`),
@@ -97,14 +97,14 @@ function loadPrivateKeys() {
     const keys = Object.keys(process.env).filter(k => k.startsWith('PRIVATE_KEY'));
     if (keys.length === 0) {
         logger.critical('No private keys found in .env file. Name them PRIVATE_KEY, PRIVATE_KEY_1, etc.');
-        process.exit(1); // Exit if no keys are found
+        process.exit(1);
     }
 
-    privateKeys = keys.map(k => process.env[k]).filter(Boolean); // Filter empty values
+    privateKeys = keys.map(k => process.env[k]).filter(Boolean);
 
     if (privateKeys.length === 0) {
         logger.critical('Private keys are defined but empty in .env file.');
-        process.exit(1); // Exit if keys are empty
+        process.exit(1);
     }
 
     logger.success(`Loaded ${privateKeys.length} private key(s) from .env file`);
@@ -175,14 +175,12 @@ async function getGasPrice() {
     try {
         logger.subStep('Fetching current gas prices...');
         const feeData = await provider.getFeeData();
-        // Add a 10% buffer to ensure transactions don't fail due to low gas
         const maxFeePerGas = (feeData.maxFeePerGas * 110n) / 100n;
         const maxPriorityFeePerGas = (feeData.maxPriorityFeePerGas * 110n) / 100n;
         logger.subStep(`Gas prices fetched: MaxFee: ${ethers.formatUnits(maxFeePerGas, "gwei")} Gwei, PriorityFee: ${ethers.formatUnits(maxPriorityFeePerGas, "gwei")} Gwei`);
         return { maxFeePerGas, maxPriorityFeePerGas };
     } catch (error) {
         logger.error(`Error getting gas price: ${error.message}. Using fallback values.`);
-        // Fallback if RPC fails to provide gas data
         return {
             maxFeePerGas: ethers.parseUnits("0.1", "gwei"),
             maxPriorityFeePerGas: ethers.parseUnits("0.1", "gwei")
@@ -216,29 +214,18 @@ async function prepareImageData(imageBuffer) {
 }
 
 function encodeTransactionData(fileRoot) {
-    // Method ID for the 'submit' function is 0xef3e12dc
     const methodId = '0xef3e12dc';
-
-    // Parameter types as expected by the contract
-    // (bytes32, bytes, bytes, bytes)
     const paramTypes = ['bytes32', 'bytes', 'bytes', 'bytes'];
-
-    // Parameter values. We only need fileRoot, others can be empty.
     const params = [
-        fileRoot,   // The actual fileRoot
-        '0x',       // proof (empty)
-        '0x',       // data (empty)
-        '0x'        // vm-related data (empty)
+        fileRoot,
+        '0x',
+        '0x',
+        '0x'
     ];
-
-    // Use AbiCoder from ethers to correctly encode parameters
     const abiCoder = AbiCoder.defaultAbiCoder();
     const encodedParams = abiCoder.encode(paramTypes, params);
-
-    // Concatenate methodId with encoded parameters
     return ethers.concat([methodId, encodedParams]);
 }
-
 
 async function uploadToStorage(imageData, wallet, walletIndex) {
     const MAX_RETRIES = 3;
@@ -250,7 +237,7 @@ async function uploadToStorage(imageData, wallet, walletIndex) {
                 root: imageData.root,
                 index: 0,
                 data: imageData.data,
-                proof: null // Proof can be null as per documentation
+                proof: null
             });
 
             logger.success(`[Wallet ${walletIndex + 1}] Segment uploaded. Submitting transaction...`);
@@ -265,7 +252,6 @@ async function uploadToStorage(imageData, wallet, walletIndex) {
                 from: wallet.address
             });
 
-            // Add a 20% buffer to the gas estimate
             const gasLimit = (gasEstimate * 120n) / 100n;
             logger.success(`[Wallet ${walletIndex + 1}] Gas estimated: ${gasLimit} units. Sending transaction...`);
 
@@ -318,7 +304,7 @@ function saveTransactionResult(txData) {
 
 async function main() {
     try {
-        logger.banner(); // Panggil banner di awal
+        logger.banner();
         logger.process('Initializing Setup');
         loadPrivateKeys();
         loadProxies();
@@ -408,11 +394,12 @@ async function main() {
             rl.close();
         });
     } catch (error) {
-        // Fallback jika logger.critical masih bermasalah
-        if (logger && typeof logger.critical === 'function') {
+        // Fallback yang lebih kuat jika logger.critical masih bermasalah
+        if (typeof logger === 'object' && typeof logger.critical === 'function') {
             logger.critical(`A critical error occurred in the main process: ${error.message}`);
         } else {
-            // Jika logger.critical gagal, setidaknya pesan error tetap terlihat
+            // Jika logger itu sendiri tidak terdefinisi atau critical bukan fungsi,
+            // langsung gunakan console.error dengan warna manual.
             console.error(`\x1b[41m\x1b[37m\x1b[1m[CRITICAL ERROR] Script encountered an unhandled error: ${error.message}\x1b[0m`);
         }
         rl.close();
