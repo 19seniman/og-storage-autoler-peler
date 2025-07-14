@@ -59,7 +59,7 @@ const logger = {
     process: (msg) => console.log(`\n${colors.white}[➤] ${msg}${colors.reset}`),
     debug: (msg) => console.log(`${colors.gray}[…] ${msg}${colors.reset}`),
     bye: (msg) => console.log(`${colors.yellow}[…] ${msg}${colors.reset}`),
-    critical: (msg) => console.log(`${colors.red}${colors.bright}[❌] ${msg}${colors.reset}`), // Menggunakan colors.bright untuk bold
+    critical: (msg) => console.log(`${colors.red}${colors.bright}[❌] ${msg}${colors.reset}`), 
     summary: (msg) => console.log(`${colors.white}[✓] ${msg}${colors.reset}`),
     section: (msg) => {
         const line = '='.repeat(50);
@@ -68,11 +68,10 @@ const logger = {
         console.log(`${colors.cyan}${line}${colors.reset}\n`);
     },
     banner: () => {
-        // Memastikan penggunaan warna di setiap baris dan bold untuk teks
-        console.log(`${colors.cyan}${colors.bright}`); // Mengaktifkan cyan dan bold untuk banner
+        console.log(`${colors.cyan}${colors.bright}`); 
         console.log(`--------------------------------------------`);
         console.log(`🍉 19Seniman From Insider 🍉`);
-        console.log(`--------------------------------------------${colors.reset}\n`); // Mengatur ulang warna setelah banner
+        console.log(`--------------------------------------------${colors.reset}\n`); 
     }
 };
 
