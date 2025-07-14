@@ -30,9 +30,6 @@ npm install
 ```
 nano .env
 ```
-format on nano .env:
-
-PRIVATE_KEY=fill yout pvkey
 
 save : ctrl x y enter
 
