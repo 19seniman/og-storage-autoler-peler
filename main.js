@@ -72,7 +72,7 @@ const logger = {
     banner: () => {
         const bannerText = `
 ${colors.lightGreen}============================================
-${colors.lightGreen}         🍉 0G.ai - Storage 🍉
+${colors.lightGreen}         🍉 0G.ai Upload Bot 🍉
 ${colors.lightGreen}         Coded by 19Seniman
 ${colors.lightGreen}         From Insider
 ${colors.lightGreen}============================================${colors.reset}
