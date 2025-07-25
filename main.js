@@ -393,18 +393,27 @@ const jaineContracts = {
 
 const jaineTokenDecimals = { USDT: 18, BTC: 18, ETH: 18, GIMO: 18 };
 
-const ERC20_ABI = [
-    "function approve(address spender, uint256 amount) returns (bool)",
+// --- Perbaikan ABI: Pisahkan ABI untuk fungsi baca dan tulis ---
+const ERC20_READ_ABI = [
     "function allowance(address owner, address spender) returns (uint256)",
     "function balanceOf(address account) returns (uint256)",
-    "event Transfer(address indexed from, address indexed to, uint256 indexed tokenId)"
+    "function decimals() view returns (uint8)", // Opsional, jika perlu desimal dari kontrak
+    "function symbol() view returns (string)",
+    "function name() view returns (string)"
 ];
+const ERC20_WRITE_ABI = [
+    "function approve(address spender, uint256 amount) returns (bool)",
+    // "event Transfer(address indexed from, address indexed to, uint256 indexed tokenId)" // Event tidak perlu di write ABI
+];
+// ABI untuk Faucet (hanya fungsi tulis)
 const FAUCET_ABI = ["function faucet()"];
 
+// Minimal Uniswap V3 Factory ABI to get pool address
 const UniswapV3Factory_ABI = [
     "function getPool(address tokenA, address tokenB, uint24 fee) external view returns (address pool)"
 ];
 
+// Minimal Uniswap V3 Pool ABI to get sqrtPriceX96 from slot0
 const UniswapV3Pool_ABI = [
     "function slot0() external view returns (uint160 sqrtPriceX96, int24 tick, uint32 observationIndex, uint16 observationCardinality, uint16 observationCardinalityNext, uint8 feeProtocol, bool unlocked)"
 ];
@@ -423,7 +432,6 @@ function sqrtPriceX96ToPrice(sqrtPriceX96, token0Decimals, token1Decimals) {
 }
 
 async function getPoolAddress(tokenA, tokenB, fee) {
-    // ABI untuk factory hanya perlu dibaca, jadi bisa pakai jaineProvider
     const factoryContract = new ethers.Contract(jaineContracts.factory, UniswapV3Factory_ABI, jaineProvider);
     try {
         const poolAddress = await factoryContract.getPool(tokenA, tokenB, fee);
@@ -442,7 +450,6 @@ async function getAmountOut(tokenInAddress, tokenOutAddress, amountIn, tokenInDe
         const poolAddress = await getPoolAddress(tokenInAddress, tokenOutAddress, fee);
         if (!poolAddress) return 0n;
 
-        // ABI untuk pool hanya perlu dibaca (slot0), jadi bisa pakai jaineProvider
         const poolContract = new ethers.Contract(poolAddress, UniswapV3Pool_ABI, jaineProvider);
         const slot0 = await poolContract.slot0();
         const sqrtPriceX96 = slot0.sqrtPriceX96;
@@ -518,7 +525,7 @@ async function requestFaucet(wallet, tokenName) {
     const tokenAddress = jaineContracts[tokenName];
     logger.step(`Requesting faucet for ${tokenName} token...`);
     try {
-        // PASTIKAN menggunakan 'wallet' di sini untuk mengirim transaksi
+        // Gunakan wallet sebagai runner untuk fungsi tulis (faucet)
         const tokenContract = new ethers.Contract(tokenAddress, FAUCET_ABI, wallet);
         const tx = await tokenContract.faucet({ gasLimit: 200000 });
         logger.loading(`Waiting for ${tokenName} faucet confirmation: ${tx.hash}`);
@@ -530,10 +537,10 @@ async function requestFaucet(wallet, tokenName) {
 }
 
 async function approveToken(wallet, tokenAddress, amount, decimals, spenderAddress, tokenName) {
-    // Untuk membaca allowance, bisa pakai jaineProvider
-    const tokenContractRead = new ethers.Contract(tokenAddress, ERC20_ABI, jaineProvider);
-    // Untuk mengirim approve, HARUS pakai wallet
-    const tokenContractWrite = new ethers.Contract(tokenAddress, ERC20_ABI, wallet);
+    // Gunakan ERC20_READ_ABI untuk membaca allowance
+    const tokenContractRead = new ethers.Contract(tokenAddress, ERC20_READ_ABI, jaineProvider);
+    // Gunakan ERC20_WRITE_ABI untuk mengirim approve
+    const tokenContractWrite = new ethers.Contract(tokenAddress, ERC20_WRITE_ABI, wallet);
 
     const amountToApprove = parseUnits(amount.toString(), decimals);
     try {
@@ -558,8 +565,6 @@ async function addLiquidity(wallet) {
     const usdtAmount = "0.086483702551157391";
     logger.step(`Adding liquidity: ${btcAmount} BTC + ${usdtAmount} USDT`);
     try {
-        // Approve tokens ke router/positionsNFT (sesuai kontrak Jaine)
-        // Di sini saya asumsikan approve ke positionsNFT
         await approveToken(wallet, jaineContracts.BTC, btcAmount, jaineTokenDecimals.BTC, jaineContracts.positionsNFT, 'BTC');
         await approveToken(wallet, jaineContracts.USDT, usdtAmount, jaineTokenDecimals.USDT, jaineContracts.positionsNFT, 'USDT');
 
@@ -577,9 +582,9 @@ async function addLiquidity(wallet) {
             encodeUint(Math.floor(Date.now() / 1000) + 1200); // deadline
 
         logger.loading(`Sending add liquidity transaction...`);
-        // Simulasi transaksi untuk mendapatkan pesan error lebih baik
         try {
-            // Untuk simulasi (call), runner bisa jaineProvider
+            // Simulasi (call) bisa menggunakan jaineProvider untuk objek kontrak atau langsung di wallet
+            // Karena kita menggunakan wallet.call() di sini, ini akan menggunakan runner dari wallet
             await wallet.call({ to: jaineContracts.positionsNFT, data: calldata, gasLimit: 600000 });
             logger.info('Add liquidity simulation successful.');
         } catch (simError) {
@@ -588,7 +593,6 @@ async function addLiquidity(wallet) {
             throw simError;
         }
 
-        // Untuk mengirim transaksi, HARUS melalui wallet.sendTransaction
         const tx = await wallet.sendTransaction({ to: jaineContracts.positionsNFT, data: calldata, gasLimit: 600000 });
         logger.loading(`Waiting for confirmation: ${tx.hash}`);
         const receipt = await tx.wait();
@@ -608,8 +612,8 @@ async function executeSwap(wallet, tokenInName, tokenOutName, amountInStr) {
         const amountInParsed = parseUnits(amountInStr, jaineTokenDecimals[tokenInName]);
 
         // --- Periksa Saldo Token ---
-        // Untuk membaca saldo, bisa pakai jaineProvider
-        const tokenInContractRead = new ethers.Contract(tokenInAddress, ERC20_ABI, jaineProvider);
+        // Gunakan ERC20_READ_ABI untuk membaca saldo
+        const tokenInContractRead = new ethers.Contract(tokenInAddress, ERC20_READ_ABI, jaineProvider);
         const currentTokenInBalance = await tokenInContractRead.balanceOf(wallet.address);
         if (currentTokenInBalance < amountInParsed) {
             throw new Error(`Insufficient ${tokenInName} balance for swap. Has: ${formatUnits(currentTokenInBalance, jaineTokenDecimals[tokenInName])}, Needs: ${amountInStr}`);
@@ -649,9 +653,9 @@ async function executeSwap(wallet, tokenInName, tokenOutName, amountInStr) {
             encodeUint(0); // sqrtPriceLimitX96
 
         logger.loading(`Sending swap transaction...`);
-        // Simulasi transaksi untuk mendapatkan pesan error lebih baik
         try {
-            // Untuk simulasi (call), runner bisa jaineProvider
+            // Simulasi (call) bisa menggunakan jaineProvider untuk objek kontrak atau langsung di wallet
+            // Karena kita menggunakan wallet.call() di sini, ini akan menggunakan runner dari wallet
             await wallet.call({ to: jaineContracts.router, data: calldata, gasLimit: 300000 });
             logger.info('Swap simulation successful.');
         } catch (simError) {
@@ -660,7 +664,6 @@ async function executeSwap(wallet, tokenInName, tokenOutName, amountInStr) {
             throw simError;
         }
 
-        // Untuk mengirim transaksi, HARUS melalui wallet.sendTransaction
         const tx = await wallet.sendTransaction({ to: jaineContracts.router, data: calldata, gasLimit: 300000 });
         logger.loading(`Waiting for swap confirmation: ${tx.hash}`);
         const receipt = await tx.wait();
@@ -691,9 +694,9 @@ async function runJaineBot() {
     for (const wallet of wallets) {
         const ethBalance = await jaineProvider.getBalance(wallet.address);
 
-        // Untuk membaca balance token, kita butuh instans Contract dengan provider
-        const usdtContractRead = new ethers.Contract(jaineContracts.USDT, ERC20_ABI, jaineProvider);
-        const btcContractRead = new ethers.Contract(jaineContracts.BTC, ERC20_ABI, jaineProvider);
+        // Gunakan ERC20_READ_ABI untuk membaca balance token
+        const usdtContractRead = new ethers.Contract(jaineContracts.USDT, ERC20_READ_ABI, jaineProvider);
+        const btcContractRead = new ethers.Contract(jaineContracts.BTC, ERC20_READ_ABI, jaineProvider);
 
         const usdtBalance = await usdtContractRead.balanceOf(wallet.address);
         const btcBalance = await btcContractRead.balanceOf(wallet.address);
