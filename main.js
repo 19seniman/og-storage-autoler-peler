@@ -6,7 +6,6 @@ const crypto = require('crypto');
 const fs = require('fs');
 const { HttpsProxyAgent } = require('https-proxy-agent');
 
-// --- UNIFIED LOGGER AND COLORS ---
 const colors = {
     reset: "\x1b[0m",
     bright: "\x1b[1m",
