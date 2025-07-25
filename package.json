@@ -1,7 +1,7 @@
 {
-    "name": "0g Storage",
+    "name": "0g Storage & Jaine Defi",
     "version": "1.0.0",
-    "description": "Automated Upload file on 0G Storage Network ",
+    "description": "Automated Upload file on 0G Storage Network & Transaction on Jaine Defi",
     "main": "main.js",
     "scripts": {
       "start": "node main.js",
