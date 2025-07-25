@@ -64,7 +64,7 @@ const logger = {
         const border = `${colors.blue}${colors.bright}╔═════════════════════════════════════════╗${colors.reset}`;
         const title = `${colors.blue}${colors.bright}${titleLine}${colors.reset}`;
         const bottomBorder = `${colors.blue}${colors.bright}╚═════════════════════════════════════════╝${colors.reset}`;
-        
+
         console.log(`\n${border}`);
         console.log(`${title}`);
         console.log(`${bottomBorder}\n`);
@@ -253,7 +253,7 @@ async function prepareImageData(imageBuffer) {
 async function uploadToStorage(imageData, wallet, walletIndex) {
     const MAX_RETRIES = 3;
     const TIMEOUT_SECONDS = 300;
-    
+
     logger.loading(`Checking wallet balance for ${wallet.address}...`);
     const balance = await zeroGProvider.getBalance(wallet.address);
     if (balance < parseUnits('0.0015', 'ether')) {
@@ -382,7 +382,8 @@ const JAINE_CHAIN_ID = 16601;
 const jaineProvider = new JsonRpcProvider(JAINE_RPC_URL);
 
 const jaineContracts = {
-    router: '0xb95B5953FF8ee5D5d9818CdbEfE363ff2191318c',
+    router: '0xb95B5953FF8ee5D5d9818CdbEfE363ff2191318c', // Uniswap V3 Router
+    factory: '0xc8a467eC9f0eA4Ea50E56C361D6c70034aC33e14', // Uniswap V3 Factory
     positionsNFT: '0x44f24b66b3baa3a784dbeee9bfe602f15a2cc5d9',
     USDT: '0x3ec8a8705be1d5ca90066b37ba62c4183b024ebf',
     BTC: '0x36f6414ff1df609214ddaba71c84f18bcf00f67d',
@@ -395,9 +396,20 @@ const jaineTokenDecimals = { USDT: 18, BTC: 18, ETH: 18, GIMO: 18 };
 const ERC20_ABI = [
     "function approve(address spender, uint256 amount) returns (bool)",
     "function allowance(address owner, address spender) returns (uint256)",
+    "function balanceOf(address account) returns (uint256)", // Added for balance check
     "event Transfer(address indexed from, address indexed to, uint256 indexed tokenId)"
 ];
 const FAUCET_ABI = ["function faucet()"];
+
+// Minimal Uniswap V3 Factory ABI to get pool address
+const UniswapV3Factory_ABI = [
+    "function getPool(address tokenA, address tokenB, uint24 fee) external view returns (address pool)"
+];
+
+// Minimal Uniswap V3 Pool ABI to get sqrtPriceX96 from slot0
+const UniswapV3Pool_ABI = [
+    "function slot0() external view returns (uint160 sqrtPriceX96, int24 tick, uint32 observationIndex, uint16 observationCardinality, uint16 observationCardinalityNext, uint8 feeProtocol, bool unlocked)"
+];
 
 function encodeAddress(addr) { return addr.toLowerCase().replace('0x', '').padStart(64, '0'); }
 function encodeUint(n) { return BigInt(n).toString(16).padStart(64, '0'); }
@@ -405,6 +417,58 @@ function encodeInt(n) {
     const bn = BigInt(n);
     const bitmask = (1n << 256n) - 1n;
     return (bn & bitmask).toString(16).padStart(64, '0');
+}
+
+// Function to convert sqrtPriceX96 to readable price
+// This is specific to Uniswap V3 sqrtPriceX96
+function sqrtPriceX96ToPrice(sqrtPriceX96, token0Decimals, token1Decimals) {
+    const price = (Number(sqrtPriceX96) / (2**96)) ** 2;
+    // Adjust for token decimals: price * (10**token0Decimals) / (10**token1Decimals)
+    return price * (10**token0Decimals) / (10**token1Decimals);
+}
+
+// Get Uniswap V3 Pool Address
+async function getPoolAddress(tokenA, tokenB, fee) {
+    const factoryContract = new ethers.Contract(jaineContracts.factory, UniswapV3Factory_ABI, jaineProvider);
+    try {
+        const poolAddress = await factoryContract.getPool(tokenA, tokenB, fee);
+        if (poolAddress === ethers.ZeroAddress) {
+            throw new Error(`Pool not found for ${tokenA}-${tokenB} with fee ${fee}`);
+        }
+        return poolAddress;
+    } catch (error) {
+        logger.error(`Error getting pool address: ${error.message}`);
+        return null;
+    }
+}
+
+// Get estimated amount out using Uniswap V3 pool price
+async function getAmountOut(tokenInAddress, tokenOutAddress, amountIn, tokenInDecimals, tokenOutDecimals, fee) {
+    try {
+        const poolAddress = await getPoolAddress(tokenInAddress, tokenOutAddress, fee);
+        if (!poolAddress) return 0n;
+
+        const poolContract = new ethers.Contract(poolAddress, UniswapV3Pool_ABI, jaineProvider);
+        const slot0 = await poolContract.slot0();
+        const sqrtPriceX96 = slot0.sqrtPriceX96;
+
+        let price;
+        if (tokenInAddress.toLowerCase() < tokenOutAddress.toLowerCase()) {
+            // token0 is tokenIn, token1 is tokenOut
+            price = sqrtPriceX96ToPrice(sqrtPriceX96, tokenInDecimals, tokenOutDecimals);
+        } else {
+            // token0 is tokenOut, token1 is tokenIn
+            // Invert the price for price of tokenOut in terms of tokenIn
+            price = 1 / sqrtPriceX96ToPrice(sqrtPriceX96, tokenOutDecimals, tokenInDecimals);
+        }
+
+        const estimatedAmountOut = parseUnits(amountIn, tokenInDecimals) * BigInt(Math.floor(price * (10 ** tokenOutDecimals))) / BigInt(10 ** tokenInDecimals);
+        return estimatedAmountOut;
+
+    } catch (error) {
+        logger.error(`Error estimating amount out: ${error.message}`);
+        return 0n;
+    }
 }
 
 const createJaineAxiosInstance = (accessToken = null) => {
@@ -441,7 +505,7 @@ async function jaineLogin(wallet) {
         logger.success('Sign-in token obtained.');
 
         logger.loading('Verifying authentication token...');
-        const { data: { access_token } } = await axiosInstance.post('https://app.zer0.exchange/auth/v1/verify', 
+        const { data: { access_token } } = await axiosInstance.post('https://app.zer0.exchange/auth/v1/verify',
             { type: "email", email, token, gotrue_meta_security: {} },
             { headers: { ...axiosInstance.defaults.headers.common, 'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzQ3NzYwNDAwLCJleHAiOjE5MDU1MjY4MDB9.gfxfHjuyAN0wDdTQ_z_YTgIEoDCBVWuAhBC6gD3lf_8', 'authorization': `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzQ3NzYwNDAwLCJleHAiOjE5MDU1MjY4MDB9.gfxfHjuyAN0wDdTQ_z_YTgIEoDCBVWuAhBC6gD3lf_8` } }
         );
@@ -474,7 +538,7 @@ async function requestFaucet(wallet, tokenName) {
 
 async function approveToken(wallet, tokenAddress, amount, decimals, spenderAddress, tokenName) {
     const tokenContract = new ethers.Contract(tokenAddress, ERC20_ABI, wallet);
-    const amountToApprove = parseUnits(amount, decimals);
+    const amountToApprove = parseUnits(amount.toString(), decimals); // Ensure amount is string
     try {
         const currentAllowance = await tokenContract.allowance(wallet.address, spenderAddress);
         if (currentAllowance < amountToApprove) {
@@ -483,6 +547,8 @@ async function approveToken(wallet, tokenAddress, amount, decimals, spenderAddre
             logger.loading(`Waiting for approval confirmation: ${approveTx.hash}`);
             await approveTx.wait();
             logger.success(`Token approved successfully.`);
+        } else {
+            logger.info(`Allowance for ${tokenName} sufficient.`);
         }
     } catch (error) {
         logger.error(`Failed to approve ${tokenName}: ${error.message}`);
@@ -495,22 +561,38 @@ async function addLiquidity(wallet) {
     const usdtAmount = "0.086483702551157391";
     logger.step(`Adding liquidity: ${btcAmount} BTC + ${usdtAmount} USDT`);
     try {
+        // NOTE: The approve calls here should target the router, not positionsNFT for adding liquidity in V3 in most cases.
+        // Double-check Jaine's specific router functions for addLiquidity.
+        // For standard Uniswap V3, tokens are approved to the Router (which then calls the Pool),
+        // and the PositionsNFT contract mints the NFT.
+        // If it reverts, try approving to jaineContracts.router
         await approveToken(wallet, jaineContracts.BTC, btcAmount, jaineTokenDecimals.BTC, jaineContracts.positionsNFT, 'BTC');
         await approveToken(wallet, jaineContracts.USDT, usdtAmount, jaineTokenDecimals.USDT, jaineContracts.positionsNFT, 'USDT');
 
-        const calldata = '0x88316456' +
+        const calldata = '0x88316456' + // mint function from positionsNFT contract (check actual signature)
             encodeAddress(jaineContracts.BTC) +
             encodeAddress(jaineContracts.USDT) +
-            encodeUint(100) +
-            encodeInt(-887272) +
-            encodeInt(887272) +
-            encodeUint(parseUnits(btcAmount, jaineTokenDecimals.BTC)) +
-            encodeUint(parseUnits(usdtAmount, jaineTokenDecimals.USDT)) +
-            encodeUint(0) + encodeUint(0) +
+            encodeUint(100) + // Fee tier (e.g., 500 = 0.05%) - Adjust as needed
+            encodeInt(-887272) + // tickLower
+            encodeInt(887272) + // tickUpper
+            encodeUint(parseUnits(btcAmount, jaineTokenDecimals.BTC)) + // amount0Desired
+            encodeUint(parseUnits(usdtAmount, jaineTokenDecimals.USDT)) + // amount1Desired
+            encodeUint(0) + // amount0Min (set to 0 for now, could be calculated for slippage)
+            encodeUint(0) + // amount1Min (set to 0 for now, could be calculated for slippage)
             encodeAddress(wallet.address) +
-            encodeUint(Math.floor(Date.now() / 1000) + 1200);
+            encodeUint(Math.floor(Date.now() / 1000) + 1200); // deadline
 
         logger.loading(`Sending add liquidity transaction...`);
+        // Simulate transaction for better error messages
+        try {
+            await wallet.call({ to: jaineContracts.positionsNFT, data: calldata, gasLimit: 600000 });
+            logger.info('Add liquidity simulation successful.');
+        } catch (simError) {
+            logger.error(`Add liquidity simulation failed: ${simError.message}`);
+            if (simError.reason) logger.error(`Revert Reason: ${simError.reason}`);
+            throw simError; // Re-throw to prevent actual send
+        }
+
         const tx = await wallet.sendTransaction({ to: jaineContracts.positionsNFT, data: calldata, gasLimit: 600000 });
         logger.loading(`Waiting for confirmation: ${tx.hash}`);
         const receipt = await tx.wait();
@@ -521,21 +603,78 @@ async function addLiquidity(wallet) {
     }
 }
 
-async function executeSwap(wallet, tokenInName, tokenOutName, amount) {
-    logger.step(`Swapping ${amount} ${tokenInName} -> ${tokenOutName}...`);
+async function executeSwap(wallet, tokenInName, tokenOutName, amountInStr) {
+    const fee = 500; // Common Uniswap V3 fee tier (0.05%). Adjust if Jaine uses a different one.
+    logger.step(`Swapping ${amountInStr} ${tokenInName} -> ${tokenOutName}...`);
     try {
-        await approveToken(wallet, jaineContracts[tokenInName], amount, jaineTokenDecimals[tokenInName], jaineContracts.router, tokenInName);
-        
+        const tokenInAddress = jaineContracts[tokenInName];
+        const tokenOutAddress = jaineContracts[tokenOutName];
+        const amountInParsed = parseUnits(amountInStr, jaineTokenDecimals[tokenInName]);
+
+        // --- Periksa Saldo Token ---
+        const tokenInContract = new ethers.Contract(tokenInAddress, ERC20_ABI, wallet.provider);
+        const currentTokenInBalance = await tokenInContract.balanceOf(wallet.address);
+        if (currentTokenInBalance < amountInParsed) {
+            throw new Error(`Insufficient ${tokenInName} balance for swap. Has: ${formatUnits(currentTokenInBalance, jaineTokenDecimals[tokenInName])}, Needs: ${amountInStr}`);
+        }
+        logger.info(`Current ${tokenInName} balance: ${formatUnits(currentTokenInBalance, jaineTokenDecimals[tokenInName])}`);
+
+        await approveToken(wallet, tokenInAddress, amountInStr, jaineTokenDecimals[tokenInName], jaineContracts.router, tokenInName);
+
+        // --- Estimasi minAmountOut ---
+        const estimatedAmountOut = await getAmountOut(
+            tokenInAddress,
+            tokenOutAddress,
+            amountInStr,
+            jaineTokenDecimals[tokenInName],
+            jaineTokenDecimals[tokenOutName],
+            fee
+        );
+
+        if (estimatedAmountOut === 0n) {
+            throw new Error('Failed to estimate amount out. Check pool existence or token addresses.');
+        }
+
+        const SLIPPAGE_TOLERANCE = 0.01; // 1% slippage tolerance
+        const minAmountOut = estimatedAmountOut * BigInt(Math.floor((1 - SLIPPAGE_TOLERANCE) * 10000)) / 10000n;
+
+        logger.info(`Estimated ${tokenOutName} output: ${formatUnits(estimatedAmountOut, jaineTokenDecimals[tokenOutName])}`);
+        logger.info(`Minimum ${tokenOutName} acceptable: ${formatUnits(minAmountOut, jaineTokenDecimals[tokenOutName])} (with ${SLIPPAGE_TOLERANCE * 100}% slippage)`);
+
+        // Uniswap V3 Router `exactInputSingle` function signature:
+        // function exactInputSingle((
+        //     address tokenIn,
+        //     address tokenOut,
+        //     uint24 fee,
+        //     address recipient,
+        //     uint256 deadline,
+        //     uint256 amountIn,
+        //     uint256 amountOutMinimum,
+        //     uint160 sqrtPriceLimitX96
+        // )) returns (uint256 amountOut)
+        // The calldata provided in the original script `0x414bf389` is for `exactInputSingle`
+
         const calldata = '0x414bf389' +
-            encodeAddress(jaineContracts[tokenInName]) +
-            encodeAddress(jaineContracts[tokenOutName]) +
-            encodeUint(500) +
+            encodeAddress(tokenInAddress) +
+            encodeAddress(tokenOutAddress) +
+            encodeUint(fee) +
             encodeAddress(wallet.address) +
-            encodeUint(Math.floor(Date.now() / 1000) + 1200) +
-            encodeUint(parseUnits(amount, jaineTokenDecimals[tokenInName])) +
-            encodeUint(0) + '0'.repeat(64);
+            encodeUint(Math.floor(Date.now() / 1000) + 1200) + // deadline
+            encodeUint(amountInParsed) +
+            encodeUint(minAmountOut) + // Use calculated minAmountOut
+            encodeUint(0); // sqrtPriceLimitX96 (set to 0 for no limit, common for simple swaps)
 
         logger.loading(`Sending swap transaction...`);
+        // Simulate transaction for better error messages
+        try {
+            await wallet.call({ to: jaineContracts.router, data: calldata, gasLimit: 300000 });
+            logger.info('Swap simulation successful.');
+        } catch (simError) {
+            logger.error(`Swap simulation failed: ${simError.message}`);
+            if (simError.reason) logger.error(`Revert Reason: ${simError.reason}`);
+            throw simError; // Re-throw to prevent actual send
+        }
+
         const tx = await wallet.sendTransaction({ to: jaineContracts.router, data: calldata, gasLimit: 300000 });
         logger.loading(`Waiting for swap confirmation: ${tx.hash}`);
         const receipt = await tx.wait();
@@ -556,20 +695,53 @@ async function runJaineBot() {
     const wallets = privateKeys.map(pk => new Wallet(pk, jaineProvider));
 
     logger.step("Starting login process for all wallets...");
-    await Promise.all(wallets.map(wallet => jaineLogin(wallet)));
+    // Jalankan login secara berurutan untuk menghindari nonce conflict atau rate limit API
+    for (const wallet of wallets) {
+        await jaineLogin(wallet);
+        await countdownDelay(1, 'Brief delay after login...');
+    }
+    logger.success("Login process finished.");
+
 
     logger.step("Starting faucet claim process for all wallets...");
     for (const wallet of wallets) {
-        await requestFaucet(wallet, 'BTC');
-        await requestFaucet(wallet, 'USDT');
-        await requestFaucet(wallet, 'ETH');
-        await countdownDelay(2, 'Waiting...');
+        // Cek saldo sebelum klaim faucet untuk menghindari klaim berulang jika sudah ada
+        const ethBalance = await jaineProvider.getBalance(wallet.address);
+        const usdtContract = new ethers.Contract(jaineContracts.USDT, ERC20_ABI, jaineProvider);
+        const btcContract = new ethers.Contract(jaineContracts.BTC, ERC20_ABI, jaineProvider);
+
+        const usdtBalance = await usdtContract.balanceOf(wallet.address);
+        const btcBalance = await btcContract.balanceOf(wallet.address);
+
+        logger.info(`Wallet ${wallet.address} Balances: ETH=${formatUnits(ethBalance, 'ether')}, USDT=${formatUnits(usdtBalance, jaineTokenDecimals.USDT)}, BTC=${formatUnits(btcBalance, jaineTokenDecimals.BTC)}`);
+
+        if (parseFloat(formatUnits(btcBalance, jaineTokenDecimals.BTC)) < 0.00001) { // Set threshold for claiming
+            await requestFaucet(wallet, 'BTC');
+            await countdownDelay(2, 'Waiting...');
+        } else {
+            logger.info(`BTC balance for ${wallet.address} is sufficient.`);
+        }
+
+        if (parseFloat(formatUnits(usdtBalance, jaineTokenDecimals.USDT)) < 1) { // Set threshold for claiming
+            await requestFaucet(wallet, 'USDT');
+            await countdownDelay(2, 'Waiting...');
+        } else {
+            logger.info(`USDT balance for ${wallet.address} is sufficient.`);
+        }
+        
+        // ETH faucet (for gas) is usually tied to native token; only claim if very low
+        if (parseFloat(formatUnits(ethBalance, 'ether')) < 0.001) { // Set threshold for claiming
+            await requestFaucet(wallet, 'ETH');
+            await countdownDelay(2, 'Waiting...');
+        } else {
+            logger.info(`ETH (OG) balance for ${wallet.address} is sufficient.`);
+        }
     }
     logger.success("Faucet claim process finished.");
 
     const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
     const question = (query) => new Promise(resolve => rl.question(query, resolve));
-    
+
     const dailySetsInput = await question(`\n${colors.white}[?] Enter the number of daily transaction sets: ${colors.reset}`);
     const dailySets = parseInt(dailySetsInput);
     if (isNaN(dailySets) || dailySets <= 0) {
@@ -577,7 +749,7 @@ async function runJaineBot() {
         rl.close();
         return;
     }
-    
+
     const includeAddLiquidity = await question(`${colors.white}[?] Include Add Liquidity in daily cycle? (y/n): ${colors.reset}`);
     const addLiquidityEnabled = ['y', 'yes'].includes(includeAddLiquidity.toLowerCase());
     rl.close();
@@ -590,16 +762,31 @@ async function runJaineBot() {
             logger.section(`Starting Daily Transaction Set ${i} of ${dailySets}`);
             for (const [index, wallet] of wallets.entries()) {
                 logger.step(`Processing Wallet ${index + 1}: ${wallet.address}`);
+                // Optional: Check current balances before each major operation
+                const currentEthBalance = await jaineProvider.getBalance(wallet.address);
+                if (currentEthBalance < parseUnits('0.0005', 'ether')) { // Example threshold for gas
+                    logger.warn(`Low ETH (OG) balance for ${wallet.address}. Skipping operations for this wallet this round.`);
+                    continue;
+                }
+
                 if (addLiquidityEnabled) {
                     await addLiquidity(wallet);
                     await countdownDelay(5, `Delay after liquidity...`);
                 }
+
+                // Swap BTC to USDT
                 await executeSwap(wallet, 'BTC', 'USDT', getRandomAmount(0.00000015, 0.00000020, 8));
                 await countdownDelay(5, `Delay after swap...`);
-                await executeSwap(wallet, 'USDT', 'BTC', getRandomAmount(1.5, 2.5, 2));
+
+                // Swap USDT to BTC
+                await executeSwap(wallet, 'USDT', 'BTC', getRandomAmount(0.00015, 0.00025, 5)); // Adjusted amount for more realistic swap
                 await countdownDelay(5, `Delay after swap...`);
+
+                // Swap USDT to GIMO
                 await executeSwap(wallet, 'USDT', 'GIMO', getRandomAmount(100, 105, 2));
                 await countdownDelay(5, `Delay after swap...`);
+
+                // Swap GIMO to USDT
                 await executeSwap(wallet, 'GIMO', 'USDT', getRandomAmount(0.0001, 0.00015, 5));
                 await countdownDelay(10, `Delay after wallet cycle...`);
             }
@@ -643,7 +830,7 @@ async function startScript() {
         const countInput = await question(`\n${colors.white}[?] How many files to upload per wallet per 24-hour cycle? ${colors.reset}`);
         const count = parseInt(countInput);
         rl.close();
-        
+
         const uploadCount = (isNaN(count) || count <= 0) ? 1 : count;
         if (isNaN(count) || count <= 0) {
             logger.warn('Invalid number. Defaulting to 1.');
