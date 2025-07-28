@@ -76,10 +76,12 @@ const logger = {
         console.log(`${colors.gray}${line}${colors.reset}\n`);
     },
     countdown: (msg) => process.stdout.write(`\r${colors.blue}[⏰] ${msg}${colors.reset}`),
+    // Added logger.wallet to support the new script
+    wallet: (msg) => console.log(`${colors.lightBlue}[W] ${msg}${colors.reset}`),
 };
 
 // =================================================================================================
-// === 0G STORAGE UPLOADER BOT - SECTION START
+// === 0G STORAGE UPLOADER FILE - SECTION START
 // =================================================================================================
 const ZERO_G_CHAIN_ID = 16601;
 const ZERO_G_RPC_URL = 'https://evmrpc-testnet.0g.ai';
@@ -382,427 +384,462 @@ async function runUploads(countPerWallet) {
 }
 
 // =================================================================================================
-// === 0G STORAGE UPLOADER BOT - SECTION END
+// === 0G STORAGE UPLOADER FILE - SECTION END
 // =================================================================================================
 
 
 // =================================================================================================
-// === JAINE DEFI BOT - SECTION START
+// === JAINE DEFI TESTNET - SECTION START
 // =================================================================================================
-const JAINE_RPC_URL = 'https://evmrpc-testnet.0g.ai/';
-const JAINE_CHAIN_ID = 16601;
-const jaineProvider = new JsonRpcProvider(JAINE_RPC_URL);
 
-const jaineContracts = {
-    router: '0xb95B5953FF8ee5D5d9818CdbEfE363ff2191318c',
-    positionsNFT: '0x44f24b66b3baa3a784dbeee9bfe602f15a2cc5d9',
-    USDT: '0x3ec8a8705be1d5ca90066b37ba62c4183b024ebf',
-    BTC: '0x36f6414ff1df609214ddaba71c84f18bcf00f67d',
-    ETH: '0x0fE9B43625fA7EdD663aDcEC0728DD635e4AbF7c',
-    GIMO: '0xba2ae6c8cddd628a087d7e43c1ba9844c5bf9638'
-};
+ const RPC_URL = 'https://evmrpc-testnet.0g.ai/'; 
+ const CHAIN_ID = 16601; 
+ const provider = new JsonRpcProvider(RPC_URL); 
 
-const jaineTokenDecimals = { USDT: 6, BTC: 8, ETH: 18, GIMO: 18 }; // Corrected BTC and USDT decimals
+ const contracts = { 
+     router: '0xb95B5953FF8ee5D5d9818CdbEfE363ff2191318c', 
+     positionsNFT: '0x44f24b66b3baa3a784dbeee9bfe602f15a2cc5d9', 
+     USDT: '0x3ec8a8705be1d5ca90066b37ba62c4183b024ebf', 
+     BTC: '0x36f6414ff1df609214ddaba71c84f18bcf00f67d', 
+     ETH: '0x0fE9B43625fA7EdD663aDcEC0728DD635e4AbF7c', 
+     GIMO: '0xba2ae6c8cddd628a087d7e43c1ba9844c5bf9638' 
+ }; 
 
-const ERC20_ABI = [
-    "function approve(address spender, uint256 amount) returns (bool)",
-    "function allowance(address owner, address spender) returns (uint256)",
-    "function balanceOf(address owner) view returns (uint256)", // Added balanceOf to check token balance
-    "function decimals() view returns (uint8)", // Added decimals to verify
-    "event Transfer(address indexed from, address indexed to, uint256 indexed tokenId)"
-];
-// Faucet ABI - assuming a simple faucet() function
-const FAUCET_ABI = ["function faucet()", "function claim()", "function requestTokens()"]; // Added common faucet names
+ const tokenDecimals = { 
+     USDT: 18, 
+     BTC: 18, 
+     ETH: 18, 
+     GIMO: 18 
+ }; 
 
-function encodeAddress(addr) { return addr.toLowerCase().replace('0x', '').padStart(64, '0'); }
-function encodeUint(n) { return BigInt(n).toString(16).padStart(64, '0'); }
-function encodeInt(n) {
-    const bn = BigInt(n);
-    const bitmask = (1n << 256n) - 1n;
-    return (bn & bitmask).toString(16).padStart(64, '0');
-}
+ const ERC20_ABI = [ 
+     "function approve(address spender, uint256 amount) returns (bool)", 
+     "function allowance(address owner, uint256 amount) returns (uint256)", // Corrected allowance signature
+    "function balanceOf(address owner) view returns (uint256)", // Added balanceOf
+    "function decimals() view returns (uint8)", // Added decimals
+     "event Transfer(address indexed from, address indexed to, uint256 indexed tokenId)" 
+ ]; 
 
-const createJaineAxiosInstance = (accessToken = null) => {
-    const headers = { "accept": "*/*", "content-type": "application/json", "Referer": "https://test.jaine.app/" };
-    if (accessToken) {
-        headers['authorization'] = `Bearer ${accessToken}`;
-        headers['apikey'] = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzQ3NzYwNDAwLCJleHAiOjE5MDU1MjY4MDB9.gfxfHjuyAN0wDdTQ_z_YTgIEoDCBVWuAhBC6gD3lf_8';
-    }
-    return axios.create({ headers });
-};
+ function encodeAddress(addr) { 
+     return addr.toLowerCase().replace('0x', '').padStart(64, '0'); 
+ } 
 
-async function jaineLogin(wallet) {
-    logger.step(`Starting login process for wallet ${wallet.address}...`);
-    try {
-        const axiosInstance = createJaineAxiosInstance();
-        logger.loading('Getting nonce...');
-        const { data: { nonce } } = await axiosInstance.post('https://siwe.zer0.exchange/nonce', {
-            provider: "siwe", chain_id: JAINE_CHAIN_ID, wallet: wallet.address
-        });
-        if (!nonce) throw new Error('Failed to get nonce.');
-        logger.success('Nonce obtained.');
+ function encodeUint(n) { 
+     return BigInt(n).toString(16).padStart(64, '0'); 
+ } 
 
-        const issuedAt = new Date().toISOString();
-        const message = `test.jaine.app wants you to sign in with your Ethereum account:\n${wallet.address}\n\n\nURI: https://test.jaine.app\nVersion: 1\nChain ID: ${JAINE_CHAIN_ID}\nNonce: ${nonce}\nIssued At: ${issuedAt}`;
-        logger.loading('Signing message...');
-        const signature = await wallet.signMessage(message);
-        logger.success('Message signed.');
+ function encodeInt(n) { 
+     const bn = BigInt(n); 
+     const bitmask = (1n << 256n) - 1n; 
+     const twosComplement = bn & bitmask; 
+     return twosComplement.toString(16).padStart(64, '0'); 
+ } 
 
-        logger.loading('Sending signature for verification...');
-        const { data: { email, token } } = await axiosInstance.post('https://siwe.zer0.exchange/sign-in', {
-            provider: "siwe", chain_id: JAINE_CHAIN_ID, wallet: wallet.address, message, signature
-        });
-        if (!token) throw new Error('Failed to get sign-in token.');
-        logger.success('Sign-in token obtained.');
+ const createAxiosInstance = (accessToken = null) => { 
+     const userAgent = getRandomUserAgent(); 
+     const headers = { 
+         'User-Agent': userAgent, 
+         'accept': '*/*', 
+         'accept-language': 'en-US,en;q=0.6', 
+         'content-type': 'application/json', 
+         'priority': 'u=1, i', 
+         'sec-ch-ua': '"Not)A;Brand";v="8", "Chromium";v="138", "Brave";v="138"', 
+         'sec-ch-ua-mobile': '?0', 
+         'sec-ch-ua-platform': '"Windows"', 
+         'sec-fetch-dest': 'empty', 
+         'sec-fetch-mode': 'cors', 
+         'sec-fetch-site': 'cross-site', 
+         'sec-gpc': '1', 
+         'Referer': 'https://test.jaine.app/' 
+     }; 
+     if (accessToken) { 
+         headers['authorization'] = `Bearer ${accessToken}`; 
+         headers['apikey'] = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzQ3NzYwNDAwLCJleHAiOjE5MDU1MjY4MDB9.gfxfHjuyAN0wDdTQ_z_YTgIEoDCBVWuAhBC6gD3lf_8'; 
+     } 
+     return axios.create({ headers }); 
+ }; 
 
-        logger.loading('Verifying authentication token...');
-        const { data: { access_token } } = await axiosInstance.post('https://app.zer0.exchange/auth/v1/verify', 
-            { type: "email", email, token, gotrue_meta_security: {} },
-            { headers: { ...axiosInstance.defaults.headers.common, 'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzQ3NzYwNDAwLCJleHAiOjE5MDU1MjY4MDB9.gfxfHjuyAN0wDdTQ_z_YTgIEoDCBVWuAhBC6gD3lf_8', 'authorization': `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzQ3NzYwNDAwLCJleHAiOjE5MDU1MjY4MDB9.gfxfHjuyAN0wDdTQ_z_YTgIEoDCBVWuAhBC6gD3lf_8` } }
-        );
-        if (!access_token) throw new Error('Failed to get access token.');
-        logger.success(`Login successful for wallet ${wallet.address}.`);
-        return access_token;
-    } catch (error) {
-        logger.error(`Login failed for ${wallet.address}: ${error.message}`);
-        return null;
-    }
-}
+ async function login(wallet) { 
+     logger.step(`Starting login process for wallet ${wallet.address}...`); 
+     try { 
+         const axiosInstance = createAxiosInstance(); 
 
-async function requestFaucet(wallet, tokenName) {
-    const tokenAddress = jaineContracts[tokenName];
-    if (!tokenAddress) {
-        logger.error(`Faucet not configured for ${tokenName}.`);
-        return;
-    }
+         logger.loading('Getting nonce...'); 
+         const nonceResponse = await axiosInstance.post('https://siwe.zer0.exchange/nonce', { 
+             provider: "siwe", 
+             chain_id: CHAIN_ID, 
+             wallet: wallet.address, 
+             ref: "", 
+             connector: { name: "OKX Wallet", type: "injected", id: "com.okex.wallet" } 
+         }); 
+         const { nonce } = nonceResponse.data; 
+         if (!nonce) throw new Error('Failed to get nonce.'); 
+         logger.success('Nonce successfully obtained.'); 
 
-    logger.step(`Requesting faucet for ${tokenName} token...`);
-    try {
-        const tokenContract = new ethers.Contract(tokenAddress, FAUCET_ABI, wallet);
-        let tx;
-        // Try common faucet method names
-        if (typeof tokenContract.faucet === 'function') {
-            tx = await tokenContract.faucet({ gasLimit: 200000 });
-        } else if (typeof tokenContract.claim === 'function') {
-            tx = await tokenContract.claim({ gasLimit: 200000 });
-        } else if (typeof tokenContract.requestTokens === 'function') {
-            tx = await tokenContract.requestTokens({ gasLimit: 200000 });
-        } else {
-            logger.warn(`No known faucet function (faucet(), claim(), requestTokens()) found for ${tokenName}.`);
-            return;
+         const issuedAt = new Date().toISOString(); 
+         const message = `test.jaine.app wants you to sign in with your Ethereum account:\n${wallet.address}\n\n\nURI: https://test.jaine.app\nVersion: 1\nChain ID: ${CHAIN_ID}\nNonce: ${nonce}\nIssued At: ${issuedAt}`; 
+         logger.loading('Signing message...'); 
+         const signature = await wallet.signMessage(message); 
+         logger.success('Message signed successfully.'); 
+
+         logger.loading('Sending signature for verification...'); 
+         const signInResponse = await axiosInstance.post('https://siwe.zer0.exchange/sign-in', { 
+             provider: "siwe", 
+             chain_id: CHAIN_ID, 
+             wallet: wallet.address, 
+             message: message, 
+             signature: signature 
+         }); 
+         const { email, token } = signInResponse.data; 
+         if (!token) throw new Error('Failed to get sign-in token.'); 
+         logger.success('Sign-in token obtained successfully.'); 
+
+         logger.loading('Verifying authentication token...'); 
+         const verifyHeaders = { 
+             ...axiosInstance.defaults.headers.common, 
+             "content-type": "application/json;charset=UTF-8", 
+             'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzQ3NzYwNDAwLCJleHAiOjE5MDU1MjY4MDB9.gfxfHjuyAN0wDdTQ_z_YTgIEoDCBVWuAhBC6gD3lf_8', 
+             'authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzQ3NzYwNDAwLCJleHAiOjE5MDU1MjY4MDB9.gfxfHjuyAN0wDdTQ_z_YTgIEoDCBVWuAhBC6gD3lf_8', 
+             'x-client-info': 'supabase-js-web/2.49.4', 
+             'x-supabase-api-version': '2024-01-01' 
+         }; 
+
+         const verifyResponse = await axios.post('https://app.zer0.exchange/auth/v1/verify', { 
+             type: "email", 
+             email: email, 
+             token: token, 
+             gotrue_meta_security: {} 
+         }, { 
+             headers: verifyHeaders 
+         }); 
+
+         const { access_token } = verifyResponse.data; 
+         if (!access_token) throw new Error('Failed to get access token.'); 
+
+         logger.success(`Login successful for wallet ${wallet.address}.`); 
+         return access_token; 
+     } catch (error) { 
+         const errorMessage = error.response ? JSON.stringify(error.response.data) : error.message; 
+         logger.error(`Login failed for ${wallet.address}: ${errorMessage}`); 
+         return null; 
+     } 
+ } 
+
+ async function requestFaucet(wallet, tokenName) { 
+     if (!['ETH', 'USDT', 'BTC'].includes(tokenName)) { 
+         logger.error(`Faucet not available for ${tokenName}. Only ETH, USDT, and BTC are supported.`); 
+         return; 
+     } 
+
+     const tokenAddress = contracts[tokenName]; 
+     logger.step(`Requesting faucet for ${tokenName} token...`); 
+     try { 
+         const tx = await wallet.sendTransaction({ 
+             to: tokenAddress, 
+             data: '0x1249c58b',  
+             gasLimit: 60000  
+         }); 
+
+         logger.loading(`Waiting for ${tokenName} faucet confirmation: ${tx.hash}`); 
+         const receipt = await tx.wait(); 
+         if (receipt.status === 1) { 
+             logger.success(`Faucet for ${tokenName} claimed successfully. Hash: ${tx.hash}`); 
+         } else { 
+             logger.error(`Faucet for ${tokenName} failed. Transaction reverted. Hash: ${tx.hash}`); 
+         } 
+     } catch (error) { 
+         let errorMessage = error.message; 
+         if (error.reason) { 
+             errorMessage = error.reason; 
+         } else if (error.data && error.data.message) { 
+             errorMessage = error.data.message; 
+         } else if (error.error && error.error.message) { 
+             errorMessage = error.error.message; 
+         } 
+          
+         logger.error(`Failed to request ${tokenName} faucet: ${errorMessage}`); 
+          
+         if (error.transactionHash) { 
+              logger.error(`Failed transaction hash: ${error.transactionHash}`); 
+         } else if (error.receipt) { 
+              logger.error(`Failed transaction hash: ${error.receipt.hash}`); 
+         } 
+     } 
+ } 
+
+ async function approveToken(wallet, tokenAddress, amount, decimals) { 
+     const tokenContract = new ethers.Contract(tokenAddress, ERC20_ABI, wallet); 
+     const spenderAddress = contracts.positionsNFT; 
+     const amountToApprove = parseUnits(amount, decimals); 
+
+     try { 
+         const currentAllowance = await tokenContract.allowance(wallet.address, spenderAddress); 
+         if (currentAllowance < amountToApprove) { 
+             logger.step(`Allowance not sufficient for PositionsNFT. Approving for ${formatUnits(amountToApprove, decimals)}...`); 
+             const approveTx = await tokenContract.approve(spenderAddress, ethers.MaxUint256); 
+             logger.loading(`Waiting for approval confirmation: ${approveTx.hash}`); 
+             await approveTx.wait(); 
+             logger.success(`Token approved successfully.`); 
+         } else {
+            logger.info(`Token already approved for sufficient amount.`);
         }
-        
-        logger.loading(`Waiting for ${tokenName} faucet confirmation: ${tx.hash}`);
-        const receipt = await tx.wait();
-        if (receipt.status === 1) {
-            logger.success(`Faucet for ${tokenName} claimed successfully. Hash: ${tx.hash}`);
-        } else {
-            logger.error(`Faucet claim for ${tokenName} failed (status 0). Hash: ${tx.hash}`);
-        }
-    } catch (error) {
-        logger.error(`Failed to request ${tokenName} faucet: ${error.message}`);
-        if (error.reason) logger.error(`Revert reason: ${error.reason}`);
-        if (error.data) logger.error(`Revert data: ${error.data}`);
-        if (error.receipt) {
-            logger.error(`Transaction Receipt Status: ${error.receipt.status}`);
-            logger.error(`Transaction Hash: ${error.receipt.hash}`);
-        }
-    }
-}
+     } catch (error) { 
+         logger.error(`Failed to approve: ${error.message}`); 
+         throw error; 
+     } 
+ } 
 
-async function approveToken(wallet, tokenAddress, amount, decimals, spenderAddress, tokenName) {
-    const tokenContract = new ethers.Contract(tokenAddress, ERC20_ABI, wallet);
-    const amountToApprove = parseUnits(amount, decimals);
-    try {
-        const currentAllowance = await tokenContract.allowance(wallet.address, spenderAddress);
-        if (currentAllowance < amountToApprove) {
-            logger.step(`Approving ${tokenName} for ${spenderAddress.slice(0, 10)}...`);
-            // Set gas limit for approval to prevent "out of gas" errors
-            const gasPrice = (await jaineProvider.getFeeData()).gasPrice || parseUnits('1.03', 'gwei');
-            const approveTx = await tokenContract.approve(spenderAddress, MaxUint256, { gasLimit: 100000, gasPrice });
-            logger.loading(`Waiting for approval confirmation: ${approveTx.hash}`);
-            await approveTx.wait();
-            logger.success(`Token approved successfully.`);
-        } else {
-            logger.info(`${tokenName} already approved.`);
-        }
-    } catch (error) {
-        logger.error(`Failed to approve ${tokenName}: ${error.message}`);
-        if (error.receipt) {
-            logger.error(`Transaction Receipt Status: ${error.receipt.status}`);
-            logger.error(`Transaction Hash: ${error.receipt.hash}`);
-        }
-        throw error; // Re-throw to stop subsequent operations if approval fails
-    }
-}
+ async function addLiquidity(wallet) { 
+     const btcAmount = "0.000001"; 
+     const usdtAmount = "0.086483702551157391"; 
 
-async function addLiquidity(wallet) {
-    const btcAmount = "0.000001";
-    const usdtAmount = "0.086483702551157391";
-    logger.step(`Adding liquidity: ${btcAmount} BTC + ${usdtAmount} USDT`);
-    try {
-        await approveToken(wallet, jaineContracts.BTC, btcAmount, jaineTokenDecimals.BTC, jaineContracts.positionsNFT, 'BTC');
-        await approveToken(wallet, jaineContracts.USDT, usdtAmount, jaineTokenDecimals.USDT, jaineContracts.positionsNFT, 'USDT');
+     const token0Address = contracts.BTC; 
+     const token1Address = contracts.USDT; 
+     const token0Decimals = tokenDecimals.BTC; 
+     const token1Decimals = tokenDecimals.USDT; 
 
-        const deadline = Math.floor(Date.now() / 1000) + 1200; // 20 minutes from now
-        
-        // Define the interface for the positionsNFT contract to encode the function call
-        const positionsNFT_ABI = [
-            "function mint(address token0, address token1, uint24 fee, int24 tickLower, int24 tickUpper, uint256 amount0Desired, uint256 amount1Desired, uint256 amount0Min, uint256 amount1Min, address recipient, uint256 deadline) returns (uint256 tokenId, uint128 amount0, uint128 amount1)"
-        ];
-        const positionsNFT_Interface = new Interface(positionsNFT_ABI);
+     logger.step(`Adding liquidity: ${btcAmount} BTC + ${usdtAmount} USDT`); 
 
-        const amount0Desired = parseUnits(btcAmount, jaineTokenDecimals.BTC);
-        const amount1Desired = parseUnits(usdtAmount, jaineTokenDecimals.USDT);
+     try { 
+         await approveToken(wallet, token0Address, btcAmount, token0Decimals); 
+         await approveToken(wallet, token1Address, usdtAmount, token1Decimals); 
 
-        const calldata = positionsNFT_Interface.encodeFunctionData("mint", [
-            jaineContracts.BTC,
-            jaineContracts.USDT,
-            100, // fee (example, confirm actual fee tier)
-            -887272,
-            887272,
-            amount0Desired,
-            amount1Desired,
-            0, // amount0Min
-            0, // amount1Min
-            wallet.address,
-            deadline
-        ]);
+         const methodId = '0x88316456'; 
+         const fee = 100; 
+         const tickLower = -887272; 
+         const tickUpper = 887272; 
+         const amount0Desired = parseUnits(btcAmount, token0Decimals); 
+         const amount1Desired = parseUnits(usdtAmount, token1Decimals); 
+         const amount0Min = (amount0Desired * 95n) / 100n;
+         const amount1Min = (amount1Desired * 95n) / 100n;
+         const deadline = Math.floor(Date.now() / 1000) + 60 * 20; 
 
-        logger.loading(`Sending add liquidity transaction...`);
-        const feeData = await jaineProvider.getFeeData();
-        const gasPrice = feeData.gasPrice || parseUnits('1.03', 'gwei');
+         const calldata = 
+             methodId + 
+             encodeAddress(token0Address) + 
+             encodeAddress(token1Address) + 
+             encodeUint(fee) + 
+             encodeInt(tickLower) + 
+             encodeInt(tickUpper) + 
+             encodeUint(amount0Desired) + 
+             encodeUint(amount1Desired) + 
+             encodeUint(amount0Min) + 
+             encodeUint(amount1Min) + 
+             encodeAddress(wallet.address) + 
+             encodeUint(deadline); 
 
-        // Estimate gas for the actual transaction before sending
-        let gasLimit;
-        try {
-            gasLimit = await wallet.estimateGas({ to: jaineContracts.positionsNFT, data: calldata, value: 0n });
-            gasLimit = gasLimit * 15n / 10n; // Increase by 50% for buffer
-            logger.info(`Estimated gas for add liquidity: ${gasLimit}`);
-        } catch (estimateError) {
-            logger.warn(`Failed to estimate gas for add liquidity, using a default. Error: ${estimateError.message}`);
-            gasLimit = 800000n; // A higher default if estimation fails
-        }
+         const tx = { 
+             to: contracts.positionsNFT, 
+             data: calldata, 
+             gasLimit: 600000, 
+         }; 
 
-        const tx = await wallet.sendTransaction({ to: jaineContracts.positionsNFT, data: calldata, gasLimit, gasPrice });
-        logger.loading(`Waiting for confirmation: ${tx.hash}`);
-        const receipt = await tx.wait();
-        if (receipt && receipt.status === 1) {
-            logger.success(`Add liquidity successful! Hash: ${tx.hash}`);
-        } else {
-            logger.error(`Add liquidity failed (status 0)! Hash: ${tx.hash}`);
-        }
-    } catch (error) {
-        logger.error(`Add liquidity failed: ${error.message}`);
-        if (error.receipt) {
-            logger.error(`Transaction Receipt Status: ${error.receipt.status}`);
-            logger.error(`Transaction Hash: ${error.receipt.hash}`);
-        }
-    }
-}
+         logger.loading(`Sending add liquidity transaction...`); 
+         const addLiqTx = await wallet.sendTransaction(tx); 
+         logger.loading(`Waiting for add liquidity confirmation: ${addLiqTx.hash}`); 
+         const receipt = await addLiqTx.wait(); 
 
-async function executeSwap(wallet, tokenInName, tokenOutName, amount) {
-    logger.step(`Swapping ${amount} ${tokenInName} -> ${tokenOutName}...`);
-    try {
-        const tokenInAddress = jaineContracts[tokenInName];
-        const tokenOutAddress = jaineContracts[tokenOutName];
-        const tokenInDecimals = jaineTokenDecimals[tokenInName];
-        const parsedAmount = parseUnits(amount, tokenInDecimals);
+         if (receipt.status === 1) { 
+             logger.success(`Add liquidity successful! Hash: ${addLiqTx.hash}`); 
+             const erc721Interface = new Interface(ERC20_ABI); 
+             const transferLog = receipt.logs.find(log => { 
+                 try { 
+                     const parsedLog = erc721Interface.parseLog(log); 
+                     return parsedLog && parsedLog.name === 'Transfer' && parsedLog.args.to.toLowerCase() === wallet.address.toLowerCase(); 
+                 } catch (e) { 
+                     return false; 
+                 } 
+             }); 
 
-        await approveToken(wallet, tokenInAddress, amount, tokenInDecimals, jaineContracts.router, tokenInName);
-        
-        const deadline = Math.floor(Date.now() / 1000) + 1200; // 20 minutes from now
+             if (transferLog) { 
+                 const parsedLog = erc721Interface.parseLog(transferLog); 
+                 const tokenId = parsedLog.args.tokenId.toString(); 
+                 logger.info(`Minted new position with tokenId: ${tokenId}`); 
+             } 
+         } else { 
+             logger.error(`Add liquidity failed! Hash: ${addLiqTx.hash}`); 
+         } 
+     } catch (error) { 
+         logger.error(`Add liquidity failed: ${error.message}`); 
+     } 
+ } 
 
-        // Define the interface for the router contract to encode the function call
-        const router_ABI = [
-            "function exactInputSingle(tuple(address tokenIn, address tokenOut, uint24 fee, address recipient, uint256 deadline, uint256 amountIn, uint256 amountOutMinimum, uint160 sqrtPriceLimitX96) params) returns (uint256 amountOut)"
-        ];
-        const router_Interface = new Interface(router_ABI);
+ async function executeSwap(wallet, tokenInName, tokenOutName, amount) { 
+     const tokenInAddress = contracts[tokenInName]; 
+     const tokenOutAddress = contracts[tokenOutName]; 
+     const tokenInDecimals = tokenDecimals[tokenInName]; 
 
-        // This assumes exactInputSingle. You might need to adjust based on the exact function used by Jaine's router.
-        const calldata = router_Interface.encodeFunctionData("exactInputSingle", [{
-            tokenIn: tokenInAddress,
-            tokenOut: tokenOutAddress,
-            fee: 500, // Example fee, confirm actual fee tier
-            recipient: wallet.address,
-            deadline: deadline,
-            amountIn: parsedAmount,
-            amountOutMinimum: 0, // Allow for some slippage
-            sqrtPriceLimitX96: 0 // No price limit
-        }]);
+     logger.step(`Starting swap of ${amount} ${tokenInName} -> ${tokenOutName}...`); 
 
-        logger.loading(`Sending swap transaction...`);
-        const feeData = await jaineProvider.getFeeData();
-        const gasPrice = feeData.gasPrice || parseUnits('1.03', 'gwei');
+     try { 
+         const tokenContract = new ethers.Contract(tokenInAddress, ERC20_ABI, wallet); 
+         const spenderAddress = contracts.router; 
+         const amountToApprove = parseUnits(amount, tokenInDecimals); 
 
-        let gasLimit;
-        try {
-            gasLimit = await wallet.estimateGas({ to: jaineContracts.router, data: calldata, value: 0n });
-            gasLimit = gasLimit * 15n / 10n; // Increase by 50% for buffer
-            logger.info(`Estimated gas for swap: ${gasLimit}`);
-        } catch (estimateError) {
-            logger.warn(`Failed to estimate gas for swap, using a default. Error: ${estimateError.message}`);
-            gasLimit = 500000n; // A higher default if estimation fails
-        }
-
-        const tx = await wallet.sendTransaction({ to: jaineContracts.router, data: calldata, gasLimit, gasPrice });
-        logger.loading(`Waiting for swap confirmation: ${tx.hash}`);
-        const receipt = await tx.wait();
-        if (receipt && receipt.status === 1) {
-            logger.success(`Swap successful! Hash: ${tx.hash}`);
-        } else {
-            logger.error(`Swap failed (status 0)! Hash: ${tx.hash}`);
-        }
-    } catch (error) {
-        logger.error(`Swap failed: ${error.message}`);
-        if (error.receipt) {
-            logger.error(`Transaction Receipt Status: ${error.receipt.status}`);
-            logger.error(`Transaction Hash: ${error.receipt.hash}`);
-        }
-    }
-}
-
-function getRandomAmount(min, max, precision = 8) {
-    return (Math.random() * (max - min) + min).toFixed(precision);
-}
-
-async function runJaineBot() {
-    logger.banner("Jaine DeFi Bot");
-    if (!loadPrivateKeys()) return;
-    const wallets = privateKeys.map(pk => new Wallet(pk, jaineProvider));
-
-    logger.step("Starting login process for all wallets...");
-    // Sequential login to avoid rate limits/race conditions
-    for (const wallet of wallets) {
-        await jaineLogin(wallet);
-        await countdownDelay(1, 'Brief delay after login...');
-    }
-    
-    logger.step("Starting faucet claim process for all wallets...");
-    for (const wallet of wallets) {
-        const ethBalance = await jaineProvider.getBalance(wallet.address);
-        if (ethBalance < parseUnits('0.005', 'ether')) { // Check if ETH balance is low before requesting faucet
-            logger.warn(`Wallet ${wallet.address} has low ETH balance (${formatUnits(ethBalance, 'ether')}). Requesting ETH faucet if available.`);
-            // Only request ETH faucet if it's explicitly part of the Jaine contracts or a separate contract
-            // For now, assuming ETH faucet is not directly through jaineContracts.ETH
-            // If there's a specific ETH faucet contract, add it to jaineContracts and call it.
-            // requestFaucet(wallet, 'ETH'); // Uncomment if there's an ETH faucet contract in jaineContracts
+         const currentAllowance = await tokenContract.allowance(wallet.address, spenderAddress); 
+         if (currentAllowance < amountToApprove) { 
+             logger.step(`Allowance not sufficient for Router. Approving for ${formatUnits(amountToApprove, tokenInDecimals)}...`); 
+             const approveTx = await tokenContract.approve(spenderAddress, ethers.MaxUint256); 
+             logger.loading(`Waiting for approval confirmation: ${approveTx.hash}`); 
+             await approveTx.wait(); 
+             logger.success(`Token approved successfully.`); 
+         } else {
+            logger.info(`Token already approved for sufficient amount.`);
         }
 
-        // Check token balances before requesting faucet
-        const tokenContracts = {
-            BTC: new ethers.Contract(jaineContracts.BTC, ERC20_ABI, jaineProvider),
-            USDT: new ethers.Contract(jaineContracts.USDT, ERC20_ABI, jaineProvider),
-            GIMO: new ethers.Contract(jaineContracts.GIMO, ERC20_ABI, jaineProvider),
-        };
+         const methodId = '0x414bf389'; 
+         const fee = (tokenInName === 'USDT' || tokenOutName === 'USDT') ? 500 : 100; 
+         const amountIn = parseUnits(amount, tokenInDecimals); 
+         const deadline = Math.floor(Date.now() / 1000) + 60 * 20; 
+         const amountOutMinimum = 0; 
 
-        for (const tokenName of ['BTC', 'USDT']) { // Only request faucets for BTC and USDT
-            try {
-                const balance = await tokenContracts[tokenName].balanceOf(wallet.address);
-                const tokenDecimals = await tokenContracts[tokenName].decimals(); // Dynamically get decimals
-                jaineTokenDecimals[tokenName] = tokenDecimals; // Update global decimals
-                logger.info(`Wallet ${wallet.address} ${tokenName} balance: ${formatUnits(balance, tokenDecimals)}`);
-                if (balance < parseUnits('0.0001', tokenDecimals)) { // Request if balance is too low
-                    await requestFaucet(wallet, tokenName);
-                    await countdownDelay(5, `Delay after ${tokenName} faucet...`);
-                } else {
-                    logger.info(`Wallet ${wallet.address} has sufficient ${tokenName} balance.`);
-                }
-            } catch (balanceError) {
-                logger.error(`Failed to check ${tokenName} balance for ${wallet.address}: ${balanceError.message}. Attempting faucet anyway.`);
-                await requestFaucet(wallet, tokenName);
-                await countdownDelay(5, `Delay after ${tokenName} faucet...`);
-            }
-        }
-        await countdownDelay(2, 'Waiting...');
-    }
-    logger.success("Faucet claim and balance check process finished.");
+         const calldata = 
+             methodId + 
+             encodeAddress(tokenInAddress) + 
+             encodeAddress(tokenOutAddress) + 
+             encodeUint(fee) + 
+             encodeAddress(wallet.address) + 
+             encodeUint(deadline) + 
+             encodeUint(amountIn) + 
+             encodeUint(amountOutMinimum) + 
+             '0'.repeat(64); 
 
-    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-    const question = (query) => new Promise(resolve => rl.question(query, resolve));
-    
-    const dailySetsInput = await question(`\n${colors.white}[?] Enter the number of daily transaction sets: ${colors.reset}`);
-    const dailySets = parseInt(dailySetsInput);
-    if (isNaN(dailySets) || dailySets <= 0) {
-        logger.error("Invalid input. Exiting.");
-        rl.close();
-        return;
-    }
-    
-    const includeAddLiquidity = await question(`${colors.white}[?] Include Add Liquidity in daily cycle? (y/n): ${colors.reset}`);
-    const addLiquidityEnabled = ['y', 'yes'].includes(includeAddLiquidity.toLowerCase());
-    rl.close();
+         const tx = { 
+             to: contracts.router, 
+             data: calldata, 
+             gasLimit: 300000, 
+         }; 
 
-    logger.info(`Bot will run ${dailySets} transaction set(s) every day.`);
-    if (addLiquidityEnabled) logger.info(`✓ Add Liquidity enabled`);
+         logger.loading(`Sending swap transaction...`); 
+         const swapTx = await wallet.sendTransaction(tx); 
+         logger.loading(`Waiting for swap confirmation: ${swapTx.hash}`); 
+         const receipt = await swapTx.wait(); 
 
-    while (true) {
-        for (let i = 1; i <= dailySets; i++) {
-            logger.section(`Starting Daily Transaction Set ${i} of ${dailySets}`);
-            for (const [index, wallet] of wallets.entries()) {
-                logger.step(`Processing Wallet ${index + 1}: ${wallet.address}`);
-                
-                // Get fresh token balances before each action
-                const btcBalance = await new ethers.Contract(jaineContracts.BTC, ERC20_ABI, jaineProvider).balanceOf(wallet.address);
-                const usdtBalance = await new ethers.Contract(jaineContracts.USDT, ERC20_ABI, jaineProvider).balanceOf(wallet.address);
-                const gimoBalance = await new ethers.Contract(jaineContracts.GIMO, ERC20_ABI, jaineProvider).balanceOf(wallet.address);
+         if (receipt.status === 1) { 
+             logger.success(`Swap successful! Hash: ${swapTx.hash}`); 
+         } else { 
+             logger.error(`Swap failed! Hash: ${swapTx.hash}`); 
+         } 
+     } catch (error) { 
+         logger.error(`Swap failed completely: ${error.message}`); 
+     } 
+ } 
 
-                logger.info(`Current balances: BTC ${formatUnits(btcBalance, jaineTokenDecimals.BTC)}, USDT ${formatUnits(usdtBalance, jaineTokenDecimals.USDT)}, GIMO ${formatUnits(gimoBalance, jaineTokenDecimals.GIMO)}`);
+ function getRandomAmount(min, max, precision = 8) { 
+     return (Math.random() * (max - min) + min).toFixed(precision); 
+ } 
 
-                if (addLiquidityEnabled) {
-                    // Check if sufficient tokens for liquidity
-                    const minBtcForLiq = parseUnits("0.000001", jaineTokenDecimals.BTC);
-                    const minUsdtForLiq = parseUnits("0.08", jaineTokenDecimals.USDT); // Adjust this threshold as needed
-                    if (btcBalance >= minBtcForLiq && usdtBalance >= minUsdtForLiq) {
-                        await addLiquidity(wallet);
-                        await countdownDelay(5, `Delay after liquidity...`);
-                    } else {
-                        logger.warn(`Skipping Add Liquidity for wallet ${wallet.address} due to insufficient balance.`);
-                        logger.warn(`Required: ${formatUnits(minBtcForLiq, jaineTokenDecimals.BTC)} BTC, ${formatUnits(minUsdtForLiq, jaineTokenDecimals.USDT)} USDT`);
-                        logger.warn(`Had: ${formatUnits(btcBalance, jaineTokenDecimals.BTC)} BTC, ${formatUnits(usdtBalance, jaineTokenDecimals.USDT)} USDT`);
-                    }
-                }
+ async function startCountdown(durationInSeconds) { 
+     logger.info(`All daily cycles complete. Starting 24-hour countdown...`); 
+     let remaining = durationInSeconds; 
+     while (remaining > 0) { 
+         const hours = Math.floor(remaining / 3600); 
+         const minutes = Math.floor((remaining % 3600) / 60); 
+         const seconds = remaining % 60; 
+         process.stdout.write(`[⏳] Time until next cycle: ${hours}h, ${minutes}m, ${seconds}s \r`); 
+         await new Promise(resolve => setTimeout(resolve, 1000)); 
+         remaining--; 
+     } 
+     console.log('\n'); 
+ } 
 
-                // Swaps - add checks for sufficient balance before attempting swap
-                const swap1Amount = getRandomAmount(0.00000015, 0.00000020, 8);
-                if (btcBalance >= parseUnits(swap1Amount, jaineTokenDecimals.BTC)) {
-                    await executeSwap(wallet, 'BTC', 'USDT', swap1Amount);
-                } else {
-                    logger.warn(`Skipping BTC->USDT swap for wallet ${wallet.address} due to insufficient BTC.`);
-                }
-                await countdownDelay(5, `Delay after swap...`);
+ async function getOperationChoices(rl) { 
+     const question = (query) => new Promise(resolve => rl.question(query, resolve)); 
 
-                const swap2Amount = getRandomAmount(0.005, 0.015, 2); // Adjusted for USDT likely being lower decimal
-                if (usdtBalance >= parseUnits(swap2Amount, jaineTokenDecimals.USDT)) {
-                    await executeSwap(wallet, 'USDT', 'BTC', swap2Amount);
-                } else {
-                    logger.warn(`Skipping USDT->BTC swap for wallet ${wallet.address} due to insufficient USDT.`);
-                }
-                await countdownDelay(5, `Delay after swap...`);
+     const includeAddLiquidity = await question(`${colors.white}[?] Include Add Liquidity in daily cycle? (y/n): ${colors.reset}`); 
 
-                const swap3Amount = getRandomAmount(0.01, 0.02, 2); // Adjusted for USDT likely being lower decimal
-                if (usdtBalance >= parseUnits(swap3Amount, jaineTokenDecimals.USDT)) {
-                    await executeSwap(wallet, 'USDT', 'GIMO', swap3Amount);
-                } else {
-                    logger.warn(`Skipping USDT->GIMO swap for wallet ${wallet.address} due to insufficient USDT.`);
-                }
-                await countdownDelay(5, `Delay after swap...`);
+     return { 
+         addLiquidity: ['y', 'yes'].includes(includeAddLiquidity.toLowerCase()) 
+     }; 
+ } 
 
-                const swap4Amount = getRandomAmount(0.0001, 0.00015, 5);
-                if (gimoBalance >= parseUnits(swap4Amount, jaineTokenDecimals.GIMO)) {
-                    await executeSwap(wallet, 'GIMO', 'USDT', swap4Amount);
-                } else {
-                    logger.warn(`Skipping GIMO->USDT swap for wallet ${wallet.address} due to insufficient GIMO.`);
-                }
-                await countdownDelay(10, `Delay after wallet cycle...`);
-            }
-        }
-        await countdownDelay(86400, `Time until next 24-hour cycle:`);
-    }
-}
+ async function runJaineBot() { // Renamed from main() to runJaineBot() for consistency
+     logger.banner("Jaine DeFi Bot"); // Updated banner for Jaine Bot
+     const privateKeys = fs.readFileSync('.env', 'utf8') 
+         .split('\n') 
+         .filter(line => line.startsWith('PRIVATE_KEY_')) 
+         .map(line => line.split('=')[1]?.trim()) 
+         .filter(Boolean); 
+
+     if (privateKeys.length === 0) { 
+         logger.error("No PRIVATE_KEY found in .env file. Please add your private keys."); 
+         return; 
+     } 
+     logger.info(`${privateKeys.length} wallet(s) loaded successfully.`); 
+     const wallets = privateKeys.map(pk => new Wallet(pk, provider)); 
+
+     logger.step("Starting login process for all wallets..."); 
+     const loginPromises = wallets.map(wallet => login(wallet)); 
+     const accessTokens = await Promise.all(loginPromises); 
+
+     if (accessTokens.some(token => token === null)) { 
+         logger.error("Some wallets failed to log in. Check the log above for details. The script will stop."); 
+         return; 
+     } 
+     logger.success("All wallets logged in successfully."); 
+
+     logger.step("Starting faucet claim process for all wallets..."); 
+     for (const wallet of wallets) { 
+         await requestFaucet(wallet, 'BTC'); 
+         await requestFaucet(wallet, 'USDT'); 
+         await requestFaucet(wallet, 'ETH'); 
+         await new Promise(resolve => setTimeout(resolve, 2000)); 
+     } 
+     logger.success("Faucet claim process finished."); 
+
+     const rl = readline.createInterface({ input: process.stdin, output: process.stdout }); 
+     const question = (query) => new Promise(resolve => rl.question(query, resolve)); 
+     const dailySetsInput = await question(`\n${colors.white}[?] Enter the number of daily transaction sets: ${colors.reset}`); 
+     const dailySets = parseInt(dailySetsInput); 
+
+     if (isNaN(dailySets) || dailySets <= 0) { 
+         logger.error("Invalid input. Please enter a number greater than 0."); 
+         rl.close(); 
+         return; 
+     } 
+
+     const operationConfig = await getOperationChoices(rl); 
+     rl.close(); 
+
+     logger.info(`Bot will run ${dailySets} transaction set(s) every day.`); 
+     if (operationConfig.addLiquidity) logger.info(`✓ Add Liquidity enabled`); 
+
+     while (true) { 
+         for (let i = 1; i <= dailySets; i++) { 
+             logger.step(`--- Starting Daily Transaction Set ${i} of ${dailySets} ---`); 
+             for (const wallet of wallets) { 
+                 logger.wallet(`Processing Wallet: ${wallet.address}`); 
+
+                 if (operationConfig.addLiquidity) { 
+                     await addLiquidity(wallet); 
+                     await new Promise(resolve => setTimeout(resolve, 5000)); 
+                 } 
+
+                 const btcAmount = getRandomAmount(0.00000015, 0.00000020, 8); 
+                 await executeSwap(wallet, 'BTC', 'USDT', btcAmount); 
+                 await new Promise(resolve => setTimeout(resolve, 5000)); 
+
+                 const usdtToBtcAmount = getRandomAmount(1.5, 2.5, 2); 
+                 await executeSwap(wallet, 'USDT', 'BTC', usdtToBtcAmount); 
+                 await new Promise(resolve => setTimeout(resolve, 5000)); 
+
+                 const usdtToGimoAmount = getRandomAmount(100, 105, 2); 
+                 await executeSwap(wallet, 'USDT', 'GIMO', usdtToGimoAmount); 
+                 await new Promise(resolve => setTimeout(resolve, 5000)); 
+
+                 const gimoAmount = getRandomAmount(0.0001, 0.00015, 5); 
+                 await executeSwap(wallet, 'GIMO', 'USDT', gimoAmount); 
+
+                 await new Promise(resolve => setTimeout(resolve, 10000)); 
+             } 
+         } 
+
+         await startCountdown(86400); 
+     } 
+ } 
 
 // =================================================================================================
-// === JAINE DEFI BOT - SECTION END
+// === JAINE DEFI TESTNET - SECTION END
 // =================================================================================================
 
 
