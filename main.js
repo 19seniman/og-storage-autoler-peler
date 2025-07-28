@@ -80,7 +80,7 @@ const logger = {
 };
 
 // =================================================================================================
-// === 0G STORAGE UPLOADER BOT - SECTION START
+// === 0G STORAGE UPLOADER FILE - SECTION START
 // =================================================================================================
 const ZERO_G_CHAIN_ID = 16601;
 const ZERO_G_RPC_URL = 'https://evmrpc-testnet.0g.ai';
@@ -383,12 +383,12 @@ async function runUploads(countPerWallet) {
 }
 
 // =================================================================================================
-// === 0G STORAGE UPLOADER BOT - SECTION END
+// === 0G STORAGE UPLOADER FILE - SECTION END
 // =================================================================================================
 
 
 // =================================================================================================
-// === JAINE DEFI BOT - SECTION START
+// === JAINE DEFI TESTNET - SECTION START
 // =================================================================================================
 
  const RPC_URL = 'https://evmrpc-testnet.0g.ai/'; 
@@ -786,8 +786,8 @@ async function runUploads(countPerWallet) {
      }; 
  } 
 
- async function runJaineBot() { // Renamed from main() to runJaineBot() for consistency
-     logger.banner("Jaine DeFi Bot"); // Updated banner for Jaine Bot
+ async function runJaineBot() { 
+     logger.banner("JAINE DEFI TESTNET"); 
      const privateKeys = fs.readFileSync('.env', 'utf8') 
          .split('\n') 
          .filter(line => line.startsWith('PRIVATE_KEY_')) 
@@ -872,7 +872,7 @@ async function runUploads(countPerWallet) {
  } 
 
 // =================================================================================================
-// === JAINE DEFI BOT - SECTION END
+// === JAINE DEFI TESTNET - SECTION END
 // =================================================================================================
 
 
