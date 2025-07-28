@@ -80,7 +80,7 @@ const logger = {
 };
 
 // =================================================================================================
-// === 0G STORAGE UPLOADER FILE - SECTION START
+// === 0G STORAGE UPLOADER BOT - SECTION START
 // =================================================================================================
 const ZERO_G_CHAIN_ID = 16601;
 const ZERO_G_RPC_URL = 'https://evmrpc-testnet.0g.ai';
@@ -383,12 +383,12 @@ async function runUploads(countPerWallet) {
 }
 
 // =================================================================================================
-// === 0G STORAGE UPLOADER FILE - SECTION END
+// === 0G STORAGE UPLOADER BOT - SECTION END
 // =================================================================================================
 
 
 // =================================================================================================
-// === JAINE DEFI TESTNET - SECTION START
+// === JAINE DEFI BOT - SECTION START
 // =================================================================================================
 
  const RPC_URL = 'https://evmrpc-testnet.0g.ai/'; 
@@ -413,9 +413,9 @@ async function runUploads(countPerWallet) {
 
  const ERC20_ABI = [ 
      "function approve(address spender, uint256 amount) returns (bool)", 
-     "function allowance(address owner, address spender) view returns (uint256)", // Perbaiki signature allowance
-    "function balanceOf(address owner) view returns (uint256)", // Tambahkan balanceOf
-    "function decimals() view returns (uint8)", // Tambahkan decimals
+     "function allowance(address owner, address spender) view returns (uint256)", 
+    "function balanceOf(address owner) view returns (uint256)", 
+    "function decimals() view returns (uint8)", 
      "event Transfer(address indexed from, address indexed to, uint256 indexed tokenId)" 
  ]; 
 
@@ -603,7 +603,8 @@ async function runUploads(countPerWallet) {
 
  async function addLiquidity(wallet) { 
      const btcAmount = "0.000001"; 
-     const usdtAmount = "0.086483702551157391"; 
+     // *** PERBAIKAN: Memastikan usdtAmount hanya memiliki 6 desimal ***
+     const usdtAmount = "0.086484"; // Contoh nilai yang dibulatkan/dipotong ke 6 desimal.
 
      const token0Address = contracts.BTC; 
      const token1Address = contracts.USDT; 
@@ -871,7 +872,7 @@ async function runUploads(countPerWallet) {
  } 
 
 // =================================================================================================
-// === JAINE DEFI TESTNET - SECTION END
+// === JAINE DEFI BOT - SECTION END
 // =================================================================================================
 
 
