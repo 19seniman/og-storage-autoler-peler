@@ -26,6 +26,8 @@ cd og-storage-autoler-peler
 ```
 ```
 npm install
+npm audit
+npm audit fix
 ```
 ```
 nano .env
