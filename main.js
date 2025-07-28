@@ -28,7 +28,7 @@ const logger = {
     step: (msg) => console.log(`${controllerColors.blue}[>] ${controllerColors.bright}${msg}${controllerColors.reset}`),
     critical: (msg) => console.log(`${controllerColors.red}${controllerColors.bright}[FATAL] ${msg}${controllerColors.reset}`),
     summary: (msg) => console.log(`${controllerColors.green}${controllerColors.bright}[SUMMARY] ${msg}${controllerColors.reset}`),
-    banner: (titleText = "0G Storage Scan & Jaine Bot - Airdrop Insiders") => {
+    banner: (titleText = "0G STORAGE & JAINE DEFI") => { 
         const titleLine = `║      ${titleText.padEnd(30)} ║`;
         const border = `${controllerColors.blue}${controllerColors.bright}╔═════════════════════════════════════════╗${controllerColors.reset}`;
         const title = `${controllerColors.blue}${controllerColors.bright}${titleLine}${controllerColors.reset}`;
@@ -51,7 +51,7 @@ const logger = {
 const parseUnits = ethers.parseUnits;
 const parseEther = ethers.parseEther;
 const formatEther = ethers.formatEther;
-const formatUnits = ethers.formatUnits; // Added for Jaine bot functions
+const formatUnits = ethers.formatUnits; 
 
 const RPC_URL = 'https://evmrpc-testnet.0g.ai';
 const CHAIN_ID = 16601;
