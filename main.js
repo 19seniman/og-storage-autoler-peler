@@ -1,12 +1,12 @@
 require('dotenv').config();
-const { ethers, Wallet, JsonRpcProvider, parseUnits, formatUnits, MaxUint256, Interface } = require('ethers');
+const { ethers, Wallet, JsonRpcProvider, parseUnits, formatUnits, MaxUint256, Interface, Contract } = require('ethers');
 const axios = require('axios');
 const readline = require('readline');
 const crypto = require('crypto');
 const fs = require('fs');
 const { HttpsProxyAgent } = require('https-proxy-agent');
 
-const colors = {
+const controllerColors = {
     reset: "\x1b[0m",
     bright: "\x1b[1m",
     dim: "\x1b[2m",
@@ -14,7 +14,6 @@ const colors = {
     blink: "\x1b[5m",
     reverse: "\x1b[7m",
     hidden: "\x1b[8m",
-
     black: "\x1b[30m",
     red: "\x1b[31m",
     green: "\x1b[32m",
@@ -23,60 +22,35 @@ const colors = {
     magenta: "\x1b[35m",
     cyan: "\x1b[36m",
     white: "\x1b[37m",
-    gray: "\x1b[90m",
-    lightRed: "\x1b[91m",
-    lightGreen: "\x1b[92m",
-    lightYellow: "\x1b[93m",
-    lightBlue: "\x1b[94m",
-    lightMagenta: "\x1b[95m",
-    lightCyan: "\x1b[96m",
-    lightWhite: "\x1b[97m",
-
-    bgBlack: "\x1b[40m",
-    bgRed: "\x1b[41m",
-    bgGreen: "\x1b[42m",
-    bgYellow: "\x1b[43m",
-    bgBlue: "\x1b[44m",
-    bgMagenta: "\x1b[45m",
-    bgCyan: "\x1b[46m",
-    bgWhite: "\x1b[47m",
-    bgGray: "\x1b[100m",
-    bgLightRed: "\x1b[101m",
-    bgLightGreen: "\x1b[102m",
-    bgLightYellow: "\x1b[103m",
-    bgLightBlue: "\x1b[104m",
-    bgLightMagenta: "\x1b[105m",
-    bgLightCyan: "\x1b[106m",
-    bgLightWhite: "\x1b[107m",
 };
 
-const logger = {
-    info: (msg) => console.log(`${colors.cyan}[i] ${msg}${colors.reset}`),
-    warn: (msg) => console.log(`${colors.yellow}[!] ${msg}${colors.reset}`),
-    error: (msg) => console.log(`${colors.red}[x] ${msg}${colors.reset}`),
-    success: (msg) => console.log(`${colors.green}[+] ${msg}${colors.reset}`),
-    loading: (msg) => console.log(`${colors.magenta}[*] ${msg}${colors.reset}`),
-    step: (msg) => console.log(`${colors.blue}[>] ${colors.bright}${msg}${colors.reset}`),
-    critical: (msg) => console.log(`${colors.red}${colors.bright}[FATAL] ${msg}${colors.reset}`),
-    summary: (msg) => console.log(`${colors.green}${colors.bright}[SUMMARY] ${msg}${colors.reset}`),
-    banner: (titleText = "🍉 19Seniman From Insider 🍉") => {
+const controllerLogger = {
+    info: (msg) => console.log(`${controllerColors.cyan}[i] ${msg}${controllerColors.reset}`),
+    warn: (msg) => console.log(`${controllerColors.yellow}[!] ${msg}${controllerColors.reset}`),
+    error: (msg) => console.log(`${controllerColors.red}[x] ${msg}${controllerColors.reset}`),
+    success: (msg) => console.log(`${controllerColors.green}[+] ${msg}${controllerColors.reset}`),
+    loading: (msg) => console.log(`${controllerColors.magenta}[*] ${msg}${controllerColors.reset}`),
+    step: (msg) => console.log(`${controllerColors.blue}[>] ${controllerColors.bright}${msg}${controllerColors.reset}`),
+    critical: (msg) => console.log(`${controllerColors.red}${controllerColors.bright}[FATAL] ${msg}${controllerColors.reset}`),
+    summary: (msg) => console.log(`${controllerColors.green}${controllerColors.bright}[SUMMARY] ${msg}${controllerColors.reset}`),
+    banner: (titleText = "🍉 Multi-Bot Controller 🍉") => {
         const titleLine = `║      ${titleText.padEnd(30)} ║`;
-        const border = `${colors.blue}${colors.bright}╔═════════════════════════════════════════╗${colors.reset}`;
-        const title = `${colors.blue}${colors.bright}${titleLine}${colors.reset}`;
-        const bottomBorder = `${colors.blue}${colors.bright}╚═════════════════════════════════════════╝${colors.reset}`;
-        
+        const border = `${controllerColors.blue}${controllerColors.bright}╔═════════════════════════════════════════╗${controllerColors.reset}`;
+        const title = `${controllerColors.blue}${controllerColors.bright}${titleLine}${controllerColors.reset}`;
+        const bottomBorder = `${controllerColors.blue}${controllerColors.bright}╚═════════════════════════════════════════╝${controllerColors.reset}`;
         console.log(`\n${border}`);
         console.log(`${title}`);
         console.log(`${bottomBorder}\n`);
     },
     section: (msg) => {
-        const line = '─'.repeat(40);
-        console.log(`\n${colors.gray}${line}${colors.reset}`);
-        if (msg) console.log(`${colors.white}${colors.bright} ${msg} ${colors.reset}`);
-        console.log(`${colors.gray}${line}${colors.reset}\n`);
+        const line = '─'.repeat(45);
+        console.log(`\n${controllerColors.gray}${line}${controllerColors.reset}`);
+        if (msg) console.log(`${controllerColors.white}${controllerColors.bright} ${msg} ${controllerColors.reset}`);
+        console.log(`${controllerColors.gray}${line}${controllerColors.reset}\n`);
     },
-    countdown: (msg) => process.stdout.write(`\r${colors.blue}[⏰] ${msg}${colors.reset}`),
+    countdown: (msg) => process.stdout.write(`\r${controllerColors.blue}[⏰] ${msg}${controllerColors.reset}`),
 };
+
 
 // =================================================================================================
 // === 0G STORAGE UPLOADER BOT - SECTION START
@@ -94,38 +68,35 @@ const IMAGE_SOURCES = [
     { url: 'https://loremflickr.com/800/600', responseType: 'arraybuffer' }
 ];
 
-let privateKeys = [];
-let currentKeyIndex = 0;
+let privateKeys_0g = [];
+let currentKeyIndex_0g = 0;
 
-const isEthersV6 = ethers.version.startsWith('6');
-const zeroGProvider = isEthersV6
-    ? new ethers.JsonRpcProvider(ZERO_G_RPC_URL)
-    : new ethers.providers.JsonRpcProvider(ZERO_G_RPC_URL);
+const zeroGProvider = new JsonRpcProvider(ZERO_G_RPC_URL);
 
-function loadPrivateKeys() {
+function loadPrivateKeysFor0g() {
     try {
-        privateKeys = []; // Reset array to ensure fresh load
+        privateKeys_0g = []; // Reset array to ensure fresh load
         let index = 1;
         let key;
         do {
             key = process.env[`PRIVATE_KEY_${index}`];
             if (key && isValidPrivateKey(key)) {
-                privateKeys.push(key);
+                privateKeys_0g.push(key);
             } else if (key) {
-                logger.error(`Invalid private key format at PRIVATE_KEY_${index}`);
+                controllerLogger.error(`Invalid private key format at PRIVATE_KEY_${index}`);
             }
             index++;
         } while (key);
 
-        if (privateKeys.length === 0) {
-            logger.critical('No valid private keys found in .env file');
+        if (privateKeys_0g.length === 0) {
+            controllerLogger.critical('No valid private keys found in .env file for 0G Bot.');
             return false;
         }
 
-        logger.success(`Loaded ${privateKeys.length} private key(s)`);
+        controllerLogger.success(`Loaded ${privateKeys_0g.length} private key(s) for 0G Bot.`);
         return true;
     } catch (error) {
-        logger.critical(`Failed to load private keys: ${error.message}`);
+        controllerLogger.critical(`Failed to load private keys: ${error.message}`);
         return false;
     }
 }
@@ -141,11 +112,11 @@ function isValidPrivateKey(key) {
     }
 }
 
-function getNextPrivateKey() {
-    return privateKeys[currentKeyIndex];
+function getNextPrivateKeyFor0g() {
+    return privateKeys_0g[currentKeyIndex_0g];
 }
 
-function getRandomUserAgent() {
+function getRandomUserAgentFor0g() {
     const userAgents = [
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
         'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Safari/605.1.15',
@@ -161,13 +132,13 @@ function loadProxies() {
         if (fs.existsSync(PROXY_FILE)) {
             const data = fs.readFileSync(PROXY_FILE, 'utf8');
             proxies = data.split('\n').map(line => line.trim()).filter(line => line && !line.startsWith('#'));
-            if (proxies.length > 0) logger.info(`Loaded ${proxies.length} proxies.`);
-            else logger.warn(`No proxies found in ${PROXY_FILE}`);
+            if (proxies.length > 0) controllerLogger.info(`Loaded ${proxies.length} proxies.`);
+            else controllerLogger.warn(`No proxies found in ${PROXY_FILE}`);
         } else {
-            logger.warn(`Proxy file ${PROXY_FILE} not found`);
+            controllerLogger.warn(`Proxy file ${PROXY_FILE} not found`);
         }
     } catch (error) {
-        logger.error(`Failed to load proxies: ${error.message}`);
+        controllerLogger.error(`Failed to load proxies: ${error.message}`);
     }
 }
 
@@ -181,7 +152,7 @@ function getNextProxy() {
 function createZeroGAxiosInstance() {
     const config = {
         headers: {
-            'User-Agent': getRandomUserAgent(),
+            'User-Agent': getRandomUserAgentFor0g(),
             'accept': 'application/json, text/plain, */*',
             'Referer': 'https://storagescan-galileo.0g.ai/',
         }
@@ -194,44 +165,44 @@ function createZeroGAxiosInstance() {
 }
 
 function initializeZeroGWallet() {
-    const privateKey = getNextPrivateKey();
+    const privateKey = getNextPrivateKeyFor0g();
     return new ethers.Wallet(privateKey, zeroGProvider);
 }
 
 async function checkZeroGNetworkSync() {
     try {
-        logger.loading('Checking 0G network sync...');
+        controllerLogger.loading('Checking 0G network sync...');
         const blockNumber = await zeroGProvider.getBlockNumber();
-        logger.success(`0G Network synced at block ${blockNumber}`);
+        controllerLogger.success(`0G Network synced at block ${blockNumber}`);
         return true;
     } catch (error) {
-        logger.error(`0G Network sync check failed: ${error.message}`);
+        controllerLogger.error(`0G Network sync check failed: ${error.message}`);
         return false;
     }
 }
 
 async function fetchRandomImage() {
     try {
-        logger.loading('Fetching random image...');
+        controllerLogger.loading('Fetching random image...');
         const axiosInstance = createZeroGAxiosInstance();
         const source = IMAGE_SOURCES[Math.floor(Math.random() * IMAGE_SOURCES.length)];
         const response = await axiosInstance.get(source.url, { responseType: source.responseType, maxRedirects: 5 });
-        logger.success('Image fetched successfully');
+        controllerLogger.success('Image fetched successfully');
         return response.data;
     } catch (error) {
-        logger.error(`Error fetching image: ${error.message}`);
+        controllerLogger.error(`Error fetching image: ${error.message}`);
         throw error;
     }
 }
 
 async function checkFileExists(fileHash) {
     try {
-        logger.loading(`Checking file hash ${fileHash}...`);
+        controllerLogger.loading(`Checking file hash ${fileHash}...`);
         const axiosInstance = createZeroGAxiosInstance();
         const response = await axiosInstance.get(`${INDEXER_URL}/file/info/${fileHash}`);
         return response.data.exists || false;
     } catch (error) {
-        logger.warn(`Failed to check file hash: ${error.message}`);
+        controllerLogger.warn(`Failed to check file hash: ${error.message}`);
         return false;
     }
 }
@@ -242,10 +213,10 @@ async function prepareImageData(imageBuffer) {
         const hashInput = Buffer.concat([Buffer.from(imageBuffer), crypto.randomBytes(16)]);
         const hash = '0x' + crypto.createHash('sha256').update(hashInput).digest('hex');
         if (!(await checkFileExists(hash))) {
-            logger.success(`Generated unique file hash: ${hash}`);
+            controllerLogger.success(`Generated unique file hash: ${hash}`);
             return { root: hash, data: Buffer.from(imageBuffer).toString('base64') };
         }
-        logger.warn(`Hash ${hash} already exists, retrying...`);
+        controllerLogger.warn(`Hash ${hash} already exists, retrying...`);
     }
     throw new Error(`Failed to generate unique hash after ${MAX_HASH_ATTEMPTS} attempts`);
 }
@@ -254,21 +225,21 @@ async function uploadToStorage(imageData, wallet, walletIndex) {
     const MAX_RETRIES = 3;
     const TIMEOUT_SECONDS = 300;
     
-    logger.loading(`Checking wallet balance for ${wallet.address}...`);
+    controllerLogger.loading(`Checking wallet balance for ${wallet.address}...`);
     const balance = await zeroGProvider.getBalance(wallet.address);
     if (balance < parseUnits('0.0015', 'ether')) {
         throw new Error(`Insufficient balance: ${formatUnits(balance, 'ether')} OG`);
     }
-    logger.success(`Wallet balance: ${formatUnits(balance, 'ether')} OG`);
+    controllerLogger.success(`Wallet balance: ${formatUnits(balance, 'ether')} OG`);
 
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
         try {
-            logger.loading(`Uploading file for wallet #${walletIndex + 1} (Attempt ${attempt})...`);
+            controllerLogger.loading(`Uploading file for wallet #${walletIndex + 1} (Attempt ${attempt})...`);
             const axiosInstance = createZeroGAxiosInstance();
             await axiosInstance.post(`${INDEXER_URL}/file/segment`, {
                 root: imageData.root, index: 0, data: imageData.data, proof: { siblings: [imageData.root], path: [] }
             }, { headers: { 'content-type': 'application/json' } });
-            logger.success('File segment uploaded');
+            controllerLogger.success('File segment uploaded');
 
             const data = ethers.concat([
                 Buffer.from(ZERO_G_METHOD_ID.slice(2), 'hex'),
@@ -285,27 +256,27 @@ async function uploadToStorage(imageData, wallet, walletIndex) {
             const value = parseUnits('0.000839233398436224', 'ether');
             const gasPrice = parseUnits('1.03', 'gwei');
 
-            logger.loading('Estimating gas...');
+            controllerLogger.loading('Estimating gas...');
             const gasEstimate = await zeroGProvider.estimateGas({ to: ZERO_G_CONTRACT_ADDRESS, data, from: wallet.address, value });
             const gasLimit = gasEstimate * 15n / 10n;
-            logger.success(`Gas limit set: ${gasLimit}`);
+            controllerLogger.success(`Gas limit set: ${gasLimit}`);
 
-            logger.loading('Sending transaction...');
+            controllerLogger.loading('Sending transaction...');
             const nonce = await zeroGProvider.getTransactionCount(wallet.address, 'latest');
             const tx = await wallet.sendTransaction({ to: ZERO_G_CONTRACT_ADDRESS, data, value, nonce, chainId: ZERO_G_CHAIN_ID, gasPrice, gasLimit });
-            logger.info(`Transaction sent: ${EXPLORER_URL}${tx.hash}`);
+            controllerLogger.info(`Transaction sent: ${EXPLORER_URL}${tx.hash}`);
 
-            logger.loading(`Waiting for confirmation (${TIMEOUT_SECONDS}s)...`);
+            controllerLogger.loading(`Waiting for confirmation (${TIMEOUT_SECONDS}s)...`);
             const receipt = await tx.wait(1, TIMEOUT_SECONDS * 1000);
 
             if (receipt && receipt.status === 1) {
-                logger.success(`Transaction confirmed in block ${receipt.blockNumber}`);
+                controllerLogger.success(`Transaction confirmed in block ${receipt.blockNumber}`);
                 return receipt;
             } else {
                 throw new Error(`Transaction failed: ${EXPLORER_URL}${tx.hash}`);
             }
         } catch (error) {
-            logger.error(`Upload attempt ${attempt} failed: ${error.message}`);
+            controllerLogger.error(`Upload attempt ${attempt} failed: ${error.message}`);
             if (attempt < MAX_RETRIES) {
                 await countdownDelay(15, `Retrying in`);
             } else {
@@ -316,57 +287,57 @@ async function uploadToStorage(imageData, wallet, walletIndex) {
 }
 
 async function runUploads(countPerWallet) {
-    logger.banner("0G Storage Uploader");
-    if (!loadPrivateKeys()) return;
+    controllerLogger.banner("0G Storage Uploader");
+    if (!loadPrivateKeysFor0g()) return;
     loadProxies();
 
-    logger.loading('Checking 0G network status...');
+    controllerLogger.loading('Checking 0G network status...');
     const network = await zeroGProvider.getNetwork();
     if (network.chainId !== BigInt(ZERO_G_CHAIN_ID)) {
         throw new Error(`Invalid chainId: expected ${ZERO_G_CHAIN_ID}, got ${network.chainId}`);
     }
-    logger.success(`Connected to 0G network: chainId ${network.chainId}`);
+    controllerLogger.success(`Connected to 0G network: chainId ${network.chainId}`);
     if (!(await checkZeroGNetworkSync())) throw new Error('0G Network is not synced');
 
-    logger.step("Available Wallets:");
-    privateKeys.forEach((key, index) => {
+    controllerLogger.step("Available Wallets:");
+    privateKeys_0g.forEach((key, index) => {
         const wallet = new ethers.Wallet(key);
-        logger.info(`[${index + 1}] ${wallet.address}`);
+        controllerLogger.info(`[${index + 1}] ${wallet.address}`);
     });
 
-    const totalUploads = countPerWallet * privateKeys.length;
-    logger.info(`Starting ${totalUploads} uploads (${countPerWallet} per wallet)`);
+    const totalUploads = countPerWallet * privateKeys_0g.length;
+    controllerLogger.info(`Starting ${totalUploads} uploads (${countPerWallet} per wallet)`);
 
     let successful = 0, failed = 0;
-    for (let walletIndex = 0; walletIndex < privateKeys.length; walletIndex++) {
-        currentKeyIndex = walletIndex;
+    for (let walletIndex = 0; walletIndex < privateKeys_0g.length; walletIndex++) {
+        currentKeyIndex_0g = walletIndex;
         const wallet = initializeZeroGWallet();
-        logger.section(`Processing Wallet #${walletIndex + 1} [${wallet.address}]`);
+        controllerLogger.section(`Processing Wallet #${walletIndex + 1} [${wallet.address}]`);
 
         for (let i = 1; i <= countPerWallet; i++) {
             const uploadNumber = (walletIndex * countPerWallet) + i;
-            logger.step(`Upload ${uploadNumber}/${totalUploads}`);
+            controllerLogger.step(`Upload ${uploadNumber}/${totalUploads}`);
             try {
                 const imageBuffer = await fetchRandomImage();
                 const imageData = await prepareImageData(imageBuffer);
                 await uploadToStorage(imageData, wallet, walletIndex);
                 successful++;
-                logger.success(`Upload ${uploadNumber} completed`);
+                controllerLogger.success(`Upload ${uploadNumber} completed`);
                 if (uploadNumber < totalUploads) await countdownDelay(5, `Waiting for next upload in`);
             } catch (error) {
                 failed++;
-                logger.error(`Upload ${uploadNumber} failed: ${error.message}`);
+                controllerLogger.error(`Upload ${uploadNumber} failed: ${error.message}`);
                 await countdownDelay(5, `Continuing after error in`);
             }
         }
-        if (walletIndex < privateKeys.length - 1) await countdownDelay(10, `Switching to next wallet in`);
+        if (walletIndex < privateKeys_0g.length - 1) await countdownDelay(10, `Switching to next wallet in`);
     }
 
-    logger.section('Upload Summary');
-    logger.summary(`Total wallets: ${privateKeys.length}`);
-    logger.summary(`Total attempted: ${totalUploads}`);
-    if (successful > 0) logger.success(`Successful: ${successful}`);
-    if (failed > 0) logger.error(`Failed: ${failed}`);
+    controllerLogger.section('Upload Summary');
+    controllerLogger.summary(`Total wallets: ${privateKeys_0g.length}`);
+    controllerLogger.summary(`Total attempted: ${totalUploads}`);
+    if (successful > 0) controllerLogger.success(`Successful: ${successful}`);
+    if (failed > 0) controllerLogger.error(`Failed: ${failed}`);
 }
 
 // =================================================================================================
@@ -375,8 +346,43 @@ async function runUploads(countPerWallet) {
 
 
 // =================================================================================================
-// === JAINE DEFI BOT - SECTION START
+// === JAINE DEFI Testnet
 // =================================================================================================
+const jaineColors = {
+    green: '\x1b[32m',
+    yellow: '\x1b[33m',
+    red: '\x1b[31m',
+    white: '\x1b[37m',
+    cyan: '\x1b[36m',
+    reset: '\x1b[0m',
+    bold: '\x1b[1m'
+};
+
+const jaineLogger = {
+    info: (msg) => console.log(`${jaineColors.green}[✓] ${msg}${jaineColors.reset}`),
+    wallet: (msg) => console.log(`${jaineColors.yellow}[➤] ${msg}${jaineColors.reset}`),
+    error: (msg) => console.log(`${jaineColors.red}[✗] ${msg}${jaineColors.reset}`),
+    success: (msg) => console.log(`${jaineColors.green}[✓] ${msg}${jaineColors.reset}`),
+    loading: (msg) => console.log(`${jaineColors.cyan}[⟳] ${msg}${jaineColors.reset}`),
+    step: (msg) => console.log(`${jaineColors.white}[➤] ${msg}${jaineColors.reset}`),
+    banner: () => {
+        console.log(`${jaineColors.cyan}${jaineColors.bold}`);
+        console.log('---------------------------------------------');
+        console.log('     Jaine 0G Auto Bot - Airdrop Insiders    ');
+        console.log(`---------------------------------------------${jaineColors.reset}\n`);
+    },
+    agent: (msg) => console.log(`${jaineColors.white}${msg}${jaineColors.reset}`)
+};
+
+const jaineUserAgents = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/118.0",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36"
+];
+
+const getJaineRandomUserAgent = () => jaineUserAgents[Math.floor(Math.random() * jaineUserAgents.length)];
+
 const JAINE_RPC_URL = 'https://evmrpc-testnet.0g.ai/';
 const JAINE_CHAIN_ID = 16601;
 const jaineProvider = new JsonRpcProvider(JAINE_RPC_URL);
@@ -390,25 +396,51 @@ const jaineContracts = {
     GIMO: '0xba2ae6c8cddd628a087d7e43c1ba9844c5bf9638'
 };
 
-const jaineTokenDecimals = { USDT: 18, BTC: 18, ETH: 18, GIMO: 18 };
+const jaineTokenDecimals = {
+    USDT: 18,
+    BTC: 18,
+    ETH: 18,
+    GIMO: 18
+};
 
-const ERC20_ABI = [
+const JAINE_ERC20_ABI = [
     "function approve(address spender, uint256 amount) returns (bool)",
     "function allowance(address owner, address spender) returns (uint256)",
     "event Transfer(address indexed from, address indexed to, uint256 indexed tokenId)"
 ];
-const FAUCET_ABI = ["function faucet()"];
 
-function encodeAddress(addr) { return addr.toLowerCase().replace('0x', '').padStart(64, '0'); }
-function encodeUint(n) { return BigInt(n).toString(16).padStart(64, '0'); }
-function encodeInt(n) {
+function jaineEncodeAddress(addr) {
+    return addr.toLowerCase().replace('0x', '').padStart(64, '0');
+}
+
+function jaineEncodeUint(n) {
+    return BigInt(n).toString(16).padStart(64, '0');
+}
+
+function jaineEncodeInt(n) {
     const bn = BigInt(n);
     const bitmask = (1n << 256n) - 1n;
-    return (bn & bitmask).toString(16).padStart(64, '0');
+    const twosComplement = bn & bitmask;
+    return twosComplement.toString(16).padStart(64, '0');
 }
 
 const createJaineAxiosInstance = (accessToken = null) => {
-    const headers = { "accept": "*/*", "content-type": "application/json", "Referer": "https://test.jaine.app/" };
+    const userAgent = getJaineRandomUserAgent();
+    const headers = {
+        'User-Agent': userAgent,
+        'accept': '*/*',
+        'accept-language': 'en-US,en;q=0.6',
+        'content-type': 'application/json',
+        'priority': 'u=1, i',
+        'sec-ch-ua': '"Not)A;Brand";v="8", "Chromium";v="138", "Brave";v="138"',
+        'sec-ch-ua-mobile': '?0',
+        'sec-ch-ua-platform': '"Windows"',
+        'sec-fetch-dest': 'empty',
+        'sec-fetch-mode': 'cors',
+        'sec-fetch-site': 'cross-site',
+        'sec-gpc': '1',
+        'Referer': 'https://test.jaine.app/'
+    };
     if (accessToken) {
         headers['authorization'] = `Bearer ${accessToken}`;
         headers['apikey'] = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzQ3NzYwNDAwLCJleHAiOjE5MDU1MjY4MDB9.gfxfHjuyAN0wDdTQ_z_YTgIEoDCBVWuAhBC6gD3lf_8';
@@ -417,197 +449,381 @@ const createJaineAxiosInstance = (accessToken = null) => {
 };
 
 async function jaineLogin(wallet) {
-    logger.step(`Starting login process for wallet ${wallet.address}...`);
+    jaineLogger.step(`Starting login process for wallet ${wallet.address}...`);
     try {
         const axiosInstance = createJaineAxiosInstance();
-        logger.loading('Getting nonce...');
-        const { data: { nonce } } = await axiosInstance.post('https://siwe.zer0.exchange/nonce', {
-            provider: "siwe", chain_id: JAINE_CHAIN_ID, wallet: wallet.address
+
+        jaineLogger.loading('Getting nonce...');
+        const nonceResponse = await axiosInstance.post('https://siwe.zer0.exchange/nonce', {
+            provider: "siwe",
+            chain_id: JAINE_CHAIN_ID,
+            wallet: wallet.address,
+            ref: "",
+            connector: { name: "OKX Wallet", type: "injected", id: "com.okex.wallet" }
         });
+        const { nonce } = nonceResponse.data;
         if (!nonce) throw new Error('Failed to get nonce.');
-        logger.success('Nonce obtained.');
+        jaineLogger.success('Nonce successfully obtained.');
 
         const issuedAt = new Date().toISOString();
         const message = `test.jaine.app wants you to sign in with your Ethereum account:\n${wallet.address}\n\n\nURI: https://test.jaine.app\nVersion: 1\nChain ID: ${JAINE_CHAIN_ID}\nNonce: ${nonce}\nIssued At: ${issuedAt}`;
-        logger.loading('Signing message...');
+        jaineLogger.loading('Signing message...');
         const signature = await wallet.signMessage(message);
-        logger.success('Message signed.');
+        jaineLogger.success('Message signed successfully.');
 
-        logger.loading('Sending signature for verification...');
-        const { data: { email, token } } = await axiosInstance.post('https://siwe.zer0.exchange/sign-in', {
-            provider: "siwe", chain_id: JAINE_CHAIN_ID, wallet: wallet.address, message, signature
+        jaineLogger.loading('Sending signature for verification...');
+        const signInResponse = await axiosInstance.post('https://siwe.zer0.exchange/sign-in', {
+            provider: "siwe",
+            chain_id: JAINE_CHAIN_ID,
+            wallet: wallet.address,
+            message: message,
+            signature: signature
         });
+        const { email, token } = signInResponse.data;
         if (!token) throw new Error('Failed to get sign-in token.');
-        logger.success('Sign-in token obtained.');
+        jaineLogger.success('Sign-in token obtained successfully.');
 
-        logger.loading('Verifying authentication token...');
-        const { data: { access_token } } = await axiosInstance.post('https://app.zer0.exchange/auth/v1/verify', 
-            { type: "email", email, token, gotrue_meta_security: {} },
-            { headers: { ...axiosInstance.defaults.headers.common, 'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzQ3NzYwNDAwLCJleHAiOjE5MDU1MjY4MDB9.gfxfHjuyAN0wDdTQ_z_YTgIEoDCBVWuAhBC6gD3lf_8', 'authorization': `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzQ3NzYwNDAwLCJleHAiOjE5MDU1MjY4MDB9.gfxfHjuyAN0wDdTQ_z_YTgIEoDCBVWuAhBC6gD3lf_8` } }
-        );
+        jaineLogger.loading('Verifying authentication token...');
+        const verifyHeaders = {
+            ...axiosInstance.defaults.headers.common,
+            "content-type": "application/json;charset=UTF-8",
+            'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzQ3NzYwNDAwLCJleHAiOjE5MDU1MjY4MDB9.gfxfHjuyAN0wDdTQ_z_YTgIEoDCBVWuAhBC6gD3lf_8',
+            'authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzQ3NzYwNDAwLCJleHAiOjE5MDU1MjY4MDB9.gfxfHjuyAN0wDdTQ_z_YTgIEoDCBVWuAhBC6gD3lf_8',
+            'x-client-info': 'supabase-js-web/2.49.4',
+            'x-supabase-api-version': '2024-01-01'
+        };
+
+        const verifyResponse = await axios.post('https://app.zer0.exchange/auth/v1/verify', {
+            type: "email",
+            email: email,
+            token: token,
+            gotrue_meta_security: {}
+        }, {
+            headers: verifyHeaders
+        });
+
+        const { access_token } = verifyResponse.data;
         if (!access_token) throw new Error('Failed to get access token.');
-        logger.success(`Login successful for wallet ${wallet.address}.`);
+
+        jaineLogger.success(`Login successful for wallet ${wallet.address}.`);
         return access_token;
     } catch (error) {
-        logger.error(`Login failed for ${wallet.address}: ${error.message}`);
+        const errorMessage = error.response ? JSON.stringify(error.response.data) : error.message;
+        jaineLogger.error(`Login failed for ${wallet.address}: ${errorMessage}`);
         return null;
     }
 }
 
-async function requestFaucet(wallet, tokenName) {
+async function jaineRequestFaucet(wallet, tokenName) {
     if (!['ETH', 'USDT', 'BTC'].includes(tokenName)) {
-        logger.error(`Faucet not available for ${tokenName}.`);
+        jaineLogger.error(`Faucet not available for ${tokenName}. Only ETH, USDT, and BTC are supported.`);
         return;
     }
+
     const tokenAddress = jaineContracts[tokenName];
-    logger.step(`Requesting faucet for ${tokenName} token...`);
+    jaineLogger.step(`Requesting faucet for ${tokenName} token...`);
     try {
-        const tokenContract = new ethers.Contract(tokenAddress, FAUCET_ABI, wallet);
-        const tx = await tokenContract.faucet({ gasLimit: 200000 });
-        logger.loading(`Waiting for ${tokenName} faucet confirmation: ${tx.hash}`);
-        await tx.wait();
-        logger.success(`Faucet for ${tokenName} claimed successfully.`);
+        const tx = await wallet.sendTransaction({
+            to: tokenAddress,
+            data: '0x1249c58b', 
+            gasLimit: 60000 
+        });
+
+        jaineLogger.loading(`Waiting for ${tokenName} faucet confirmation: ${tx.hash}`);
+        const receipt = await tx.wait();
+        if (receipt.status === 1) {
+            jaineLogger.success(`Faucet for ${tokenName} claimed successfully. Hash: ${tx.hash}`);
+        } else {
+            jaineLogger.error(`Faucet for ${tokenName} failed. Transaction reverted. Hash: ${tx.hash}`);
+        }
     } catch (error) {
-        logger.error(`Failed to request ${tokenName} faucet: ${error.message}`);
+        let errorMessage = error.message;
+        if (error.reason) {
+            errorMessage = error.reason;
+        } else if (error.data && error.data.message) {
+            errorMessage = error.data.message;
+        } else if (error.error && error.error.message) {
+            errorMessage = error.error.message;
+        }
+        
+        jaineLogger.error(`Failed to request ${tokenName} faucet: ${errorMessage}`);
+        
+        if (error.transactionHash) {
+             jaineLogger.error(`Failed transaction hash: ${error.transactionHash}`);
+        } else if (error.receipt) {
+             jaineLogger.error(`Failed transaction hash: ${error.receipt.hash}`);
+        }
     }
 }
 
-async function approveToken(wallet, tokenAddress, amount, decimals, spenderAddress, tokenName) {
-    const tokenContract = new ethers.Contract(tokenAddress, ERC20_ABI, wallet);
+async function jaineApproveToken(wallet, tokenAddress, amount, decimals) {
+    const tokenContract = new ethers.Contract(tokenAddress, JAINE_ERC20_ABI, wallet);
+    const spenderAddress = jaineContracts.positionsNFT;
     const amountToApprove = parseUnits(amount, decimals);
+
     try {
         const currentAllowance = await tokenContract.allowance(wallet.address, spenderAddress);
         if (currentAllowance < amountToApprove) {
-            logger.step(`Approving ${tokenName} for ${spenderAddress.slice(0, 10)}...`);
-            const approveTx = await tokenContract.approve(spenderAddress, MaxUint256);
-            logger.loading(`Waiting for approval confirmation: ${approveTx.hash}`);
+            jaineLogger.step(`Allowance not sufficient for PositionsNFT. Approving for ${formatUnits(amountToApprove, decimals)}...`);
+            const approveTx = await tokenContract.approve(spenderAddress, ethers.MaxUint256);
+            jaineLogger.loading(`Waiting for approval confirmation: ${approveTx.hash}`);
             await approveTx.wait();
-            logger.success(`Token approved successfully.`);
+            jaineLogger.success(`Token approved successfully.`);
         }
     } catch (error) {
-        logger.error(`Failed to approve ${tokenName}: ${error.message}`);
+        jaineLogger.error(`Failed to approve: ${error.message}`);
         throw error;
     }
 }
 
-async function addLiquidity(wallet) {
+async function jaineAddLiquidity(wallet) {
     const btcAmount = "0.000001";
     const usdtAmount = "0.086483702551157391";
-    logger.step(`Adding liquidity: ${btcAmount} BTC + ${usdtAmount} USDT`);
+
+    const token0Address = jaineContracts.BTC;
+    const token1Address = jaineContracts.USDT;
+    const token0Decimals = jaineTokenDecimals.BTC;
+    const token1Decimals = jaineTokenDecimals.USDT;
+
+    jaineLogger.step(`Adding liquidity: ${btcAmount} BTC + ${usdtAmount} USDT`);
+
     try {
-        await approveToken(wallet, jaineContracts.BTC, btcAmount, jaineTokenDecimals.BTC, jaineContracts.positionsNFT, 'BTC');
-        await approveToken(wallet, jaineContracts.USDT, usdtAmount, jaineTokenDecimals.USDT, jaineContracts.positionsNFT, 'USDT');
+        await jaineApproveToken(wallet, token0Address, btcAmount, token0Decimals);
+        await jaineApproveToken(wallet, token1Address, usdtAmount, token1Decimals);
 
-        const calldata = '0x88316456' +
-            encodeAddress(jaineContracts.BTC) +
-            encodeAddress(jaineContracts.USDT) +
-            encodeUint(100) +
-            encodeInt(-887272) +
-            encodeInt(887272) +
-            encodeUint(parseUnits(btcAmount, jaineTokenDecimals.BTC)) +
-            encodeUint(parseUnits(usdtAmount, jaineTokenDecimals.USDT)) +
-            encodeUint(0) + encodeUint(0) +
-            encodeAddress(wallet.address) +
-            encodeUint(Math.floor(Date.now() / 1000) + 1200);
+        const methodId = '0x88316456';
+        const fee = 100;
+        const tickLower = -887272;
+        const tickUpper = 887272;
+        const amount0Desired = parseUnits(btcAmount, token0Decimals);
+        const amount1Desired = parseUnits(usdtAmount, token1Decimals);
+        const amount0Min = (amount0Desired * 95n) / 100n;
+        const amount1Min = (amount1Desired * 95n) / 100n;
+        const deadline = Math.floor(Date.now() / 1000) + 60 * 20;
 
-        logger.loading(`Sending add liquidity transaction...`);
-        const tx = await wallet.sendTransaction({ to: jaineContracts.positionsNFT, data: calldata, gasLimit: 600000 });
-        logger.loading(`Waiting for confirmation: ${tx.hash}`);
-        const receipt = await tx.wait();
-        if (receipt.status === 1) logger.success(`Add liquidity successful! Hash: ${tx.hash}`);
-        else logger.error(`Add liquidity failed! Hash: ${tx.hash}`);
+        const calldata =
+            methodId +
+            jaineEncodeAddress(token0Address) +
+            jaineEncodeAddress(token1Address) +
+            jaineEncodeUint(fee) +
+            jaineEncodeInt(tickLower) +
+            jaineEncodeInt(tickUpper) +
+            jaineEncodeUint(amount0Desired) +
+            jaineEncodeUint(amount1Desired) +
+            jaineEncodeUint(amount0Min) +
+            jaineEncodeUint(amount1Min) +
+            jaineEncodeAddress(wallet.address) +
+            jaineEncodeUint(deadline);
+
+        const tx = {
+            to: jaineContracts.positionsNFT,
+            data: calldata,
+            gasLimit: 600000,
+        };
+
+        jaineLogger.loading(`Sending add liquidity transaction...`);
+        const addLiqTx = await wallet.sendTransaction(tx);
+        jaineLogger.loading(`Waiting for add liquidity confirmation: ${addLiqTx.hash}`);
+        const receipt = await addLiqTx.wait();
+
+        if (receipt.status === 1) {
+            jaineLogger.success(`Add liquidity successful! Hash: ${addLiqTx.hash}`);
+            const erc721Interface = new Interface(JAINE_ERC20_ABI);
+            const transferLog = receipt.logs.find(log => {
+                try {
+                    const parsedLog = erc721Interface.parseLog(log);
+                    return parsedLog && parsedLog.name === 'Transfer' && parsedLog.args.to.toLowerCase() === wallet.address.toLowerCase();
+                } catch (e) {
+                    return false;
+                }
+            });
+
+            if (transferLog) {
+                const parsedLog = erc721Interface.parseLog(transferLog);
+                const tokenId = parsedLog.args.tokenId.toString();
+                jaineLogger.info(`Minted new position with tokenId: ${tokenId}`);
+            }
+        } else {
+            jaineLogger.error(`Add liquidity failed! Hash: ${addLiqTx.hash}`);
+        }
     } catch (error) {
-        logger.error(`Add liquidity failed: ${error.message}`);
+        jaineLogger.error(`Add liquidity failed: ${error.message}`);
     }
 }
 
-async function executeSwap(wallet, tokenInName, tokenOutName, amount) {
-    logger.step(`Swapping ${amount} ${tokenInName} -> ${tokenOutName}...`);
-    try {
-        await approveToken(wallet, jaineContracts[tokenInName], amount, jaineTokenDecimals[tokenInName], jaineContracts.router, tokenInName);
-        
-        const calldata = '0x414bf389' +
-            encodeAddress(jaineContracts[tokenInName]) +
-            encodeAddress(jaineContracts[tokenOutName]) +
-            encodeUint(500) +
-            encodeAddress(wallet.address) +
-            encodeUint(Math.floor(Date.now() / 1000) + 1200) +
-            encodeUint(parseUnits(amount, jaineTokenDecimals[tokenInName])) +
-            encodeUint(0) + '0'.repeat(64);
+async function jaineExecuteSwap(wallet, tokenInName, tokenOutName, amount) {
+    const tokenInAddress = jaineContracts[tokenInName];
+    const tokenOutAddress = jaineContracts[tokenOutName];
+    const tokenInDecimals = jaineTokenDecimals[tokenInName];
 
-        logger.loading(`Sending swap transaction...`);
-        const tx = await wallet.sendTransaction({ to: jaineContracts.router, data: calldata, gasLimit: 300000 });
-        logger.loading(`Waiting for swap confirmation: ${tx.hash}`);
-        const receipt = await tx.wait();
-        if (receipt.status === 1) logger.success(`Swap successful! Hash: ${tx.hash}`);
-        else logger.error(`Swap failed! Hash: ${tx.hash}`);
+    jaineLogger.step(`Starting swap of ${amount} ${tokenInName} -> ${tokenOutName}...`);
+
+    try {
+        const tokenContract = new ethers.Contract(tokenInAddress, JAINE_ERC20_ABI, wallet);
+        const spenderAddress = jaineContracts.router;
+        const amountToApprove = parseUnits(amount, tokenInDecimals);
+
+        const currentAllowance = await tokenContract.allowance(wallet.address, spenderAddress);
+        if (currentAllowance < amountToApprove) {
+            jaineLogger.step(`Allowance not sufficient for Router. Approving for ${formatUnits(amountToApprove, tokenInDecimals)}...`);
+            const approveTx = await tokenContract.approve(spenderAddress, ethers.MaxUint256);
+            jaineLogger.loading(`Waiting for approval confirmation: ${approveTx.hash}`);
+            await approveTx.wait();
+            jaineLogger.success(`Token approved successfully.`);
+        }
+
+        const methodId = '0x414bf389';
+        const fee = (tokenInName === 'USDT' || tokenOutName === 'USDT') ? 500 : 100;
+        const amountIn = parseUnits(amount, tokenInDecimals);
+        const deadline = Math.floor(Date.now() / 1000) + 60 * 20;
+        const amountOutMinimum = 0;
+
+        const calldata =
+            methodId +
+            jaineEncodeAddress(tokenInAddress) +
+            jaineEncodeAddress(tokenOutAddress) +
+            jaineEncodeUint(fee) +
+            jaineEncodeAddress(wallet.address) +
+            jaineEncodeUint(deadline) +
+            jaineEncodeUint(amountIn) +
+            jaineEncodeUint(amountOutMinimum) +
+            '0'.repeat(64);
+
+        const tx = {
+            to: jaineContracts.router,
+            data: calldata,
+            gasLimit: 300000,
+        };
+
+        jaineLogger.loading(`Sending swap transaction...`);
+        const swapTx = await wallet.sendTransaction(tx);
+        jaineLogger.loading(`Waiting for swap confirmation: ${swapTx.hash}`);
+        const receipt = await swapTx.wait();
+
+        if (receipt.status === 1) {
+            jaineLogger.success(`Swap successful! Hash: ${swapTx.hash}`);
+        } else {
+            jaineLogger.error(`Swap failed! Hash: ${swapTx.hash}`);
+        }
     } catch (error) {
-        logger.error(`Swap failed: ${error.message}`);
+        jaineLogger.error(`Swap failed completely: ${error.message}`);
     }
 }
 
-function getRandomAmount(min, max, precision = 8) {
+function jaineGetRandomAmount(min, max, precision = 8) {
     return (Math.random() * (max - min) + min).toFixed(precision);
 }
 
+async function jaineStartCountdown(durationInSeconds) {
+    jaineLogger.info(`All daily cycles complete. Starting 24-hour countdown...`);
+    let remaining = durationInSeconds;
+    while (remaining > 0) {
+        const hours = Math.floor(remaining / 3600);
+        const minutes = Math.floor((remaining % 3600) / 60);
+        const seconds = remaining % 60;
+        process.stdout.write(`[⏳] Time until next cycle: ${hours}h, ${minutes}m, ${seconds}s \r`);
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        remaining--;
+    }
+    console.log('\n');
+}
+
+async function jaineGetOperationChoices(rl) {
+    const question = (query) => new Promise(resolve => rl.question(query, resolve));
+
+    const includeAddLiquidity = await question(`${jaineColors.white}[?] Include Add Liquidity in daily cycle? (y/n): ${jaineColors.reset}`);
+
+    return {
+        addLiquidity: ['y', 'yes'].includes(includeAddLiquidity.toLowerCase())
+    };
+}
+
+// Renamed from main() to runJaineBot() for better integration with the controller
 async function runJaineBot() {
-    logger.banner("Jaine DeFi Bot");
-    if (!loadPrivateKeys()) return;
+    jaineLogger.banner();
+
+    const privateKeys = fs.readFileSync('.env', 'utf8')
+        .split('\n')
+        .filter(line => line.startsWith('PRIVATE_KEY_'))
+        .map(line => line.split('=')[1]?.trim())
+        .filter(Boolean);
+
+    if (privateKeys.length === 0) {
+        jaineLogger.error("No PRIVATE_KEY found in .env file. Please add your private keys.");
+        return;
+    }
+    jaineLogger.info(`${privateKeys.length} wallet(s) loaded successfully.`);
     const wallets = privateKeys.map(pk => new Wallet(pk, jaineProvider));
 
-    logger.step("Starting login process for all wallets...");
-    await Promise.all(wallets.map(wallet => jaineLogin(wallet)));
+    jaineLogger.step("Starting login process for all wallets...");
+    const loginPromises = wallets.map(wallet => jaineLogin(wallet));
+    const accessTokens = await Promise.all(loginPromises);
 
-    logger.step("Starting faucet claim process for all wallets...");
-    for (const wallet of wallets) {
-        await requestFaucet(wallet, 'BTC');
-        await requestFaucet(wallet, 'USDT');
-        await requestFaucet(wallet, 'ETH');
-        await countdownDelay(2, 'Waiting...');
+    if (accessTokens.some(token => token === null)) {
+        jaineLogger.error("Some wallets failed to log in. Check the log above for details. The script will stop.");
+        return;
     }
-    logger.success("Faucet claim process finished.");
+    jaineLogger.success("All wallets logged in successfully.");
+
+    jaineLogger.step("Starting faucet claim process for all wallets...");
+    for (const wallet of wallets) {
+        await jaineRequestFaucet(wallet, 'BTC');
+        await jaineRequestFaucet(wallet, 'USDT');
+        await jaineRequestFaucet(wallet, 'ETH');
+        await new Promise(resolve => setTimeout(resolve, 2000));
+    }
+    jaineLogger.success("Faucet claim process finished.");
 
     const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
     const question = (query) => new Promise(resolve => rl.question(query, resolve));
-    
-    const dailySetsInput = await question(`\n${colors.white}[?] Enter the number of daily transaction sets: ${colors.reset}`);
+    const dailySetsInput = await question(`\n${jaineColors.white}[?] Enter the number of daily transaction sets: ${jaineColors.reset}`);
     const dailySets = parseInt(dailySetsInput);
+
     if (isNaN(dailySets) || dailySets <= 0) {
-        logger.error("Invalid input. Exiting.");
+        jaineLogger.error("Invalid input. Please enter a number greater than 0.");
         rl.close();
         return;
     }
-    
-    const includeAddLiquidity = await question(`${colors.white}[?] Include Add Liquidity in daily cycle? (y/n): ${colors.reset}`);
-    const addLiquidityEnabled = ['y', 'yes'].includes(includeAddLiquidity.toLowerCase());
+
+    const operationConfig = await jaineGetOperationChoices(rl);
     rl.close();
 
-    logger.info(`Bot will run ${dailySets} transaction set(s) every day.`);
-    if (addLiquidityEnabled) logger.info(`✓ Add Liquidity enabled`);
+    jaineLogger.info(`Bot will run ${dailySets} transaction set(s) every day.`);
+    if (operationConfig.addLiquidity) jaineLogger.info(`✓ Add Liquidity enabled`);
 
     while (true) {
         for (let i = 1; i <= dailySets; i++) {
-            logger.section(`Starting Daily Transaction Set ${i} of ${dailySets}`);
-            for (const [index, wallet] of wallets.entries()) {
-                logger.step(`Processing Wallet ${index + 1}: ${wallet.address}`);
-                if (addLiquidityEnabled) {
-                    await addLiquidity(wallet);
-                    await countdownDelay(5, `Delay after liquidity...`);
+            jaineLogger.step(`--- Starting Daily Transaction Set ${i} of ${dailySets} ---`);
+            for (const wallet of wallets) {
+                jaineLogger.wallet(`Processing Wallet: ${wallet.address}`);
+
+                if (operationConfig.addLiquidity) {
+                    await jaineAddLiquidity(wallet);
+                    await new Promise(resolve => setTimeout(resolve, 5000));
                 }
-                await executeSwap(wallet, 'BTC', 'USDT', getRandomAmount(0.00000015, 0.00000020, 8));
-                await countdownDelay(5, `Delay after swap...`);
-                await executeSwap(wallet, 'USDT', 'BTC', getRandomAmount(1.5, 2.5, 2));
-                await countdownDelay(5, `Delay after swap...`);
-                await executeSwap(wallet, 'USDT', 'GIMO', getRandomAmount(100, 105, 2));
-                await countdownDelay(5, `Delay after swap...`);
-                await executeSwap(wallet, 'GIMO', 'USDT', getRandomAmount(0.0001, 0.00015, 5));
-                await countdownDelay(10, `Delay after wallet cycle...`);
+
+                const btcAmount = jaineGetRandomAmount(0.00000015, 0.00000020, 8);
+                await jaineExecuteSwap(wallet, 'BTC', 'USDT', btcAmount);
+                await new Promise(resolve => setTimeout(resolve, 5000));
+
+                const usdtToBtcAmount = jaineGetRandomAmount(1.5, 2.5, 2);
+                await jaineExecuteSwap(wallet, 'USDT', 'BTC', usdtToBtcAmount);
+                await new Promise(resolve => setTimeout(resolve, 5000));
+
+                const usdtToGimoAmount = jaineGetRandomAmount(100, 105, 2);
+                await jaineExecuteSwap(wallet, 'USDT', 'GIMO', usdtToGimoAmount);
+                await new Promise(resolve => setTimeout(resolve, 5000));
+
+                const gimoAmount = jaineGetRandomAmount(0.0001, 0.00015, 5);
+                await jaineExecuteSwap(wallet, 'GIMO', 'USDT', gimoAmount);
+
+                await new Promise(resolve => setTimeout(resolve, 10000));
             }
         }
-        await countdownDelay(86400, `Time until next 24-hour cycle:`);
+
+        await jaineStartCountdown(86400);
     }
 }
-
 // =================================================================================================
 // === JAINE DEFI BOT - SECTION END
 // =================================================================================================
@@ -620,7 +836,7 @@ async function countdownDelay(durationInSeconds, message) {
         const minutes = Math.floor((i % 3600) / 60);
         const seconds = i % 60;
         const timeString = `${hours > 0 ? hours + 'h ' : ''}${minutes > 0 ? minutes + 'm ' : ''}${seconds}s`;
-        logger.countdown(`${message} ${timeString}`);
+        controllerLogger.countdown(`${message} ${timeString}`);
         await new Promise(resolve => setTimeout(resolve, 1000));
     }
     process.stdout.write('\n');
@@ -631,33 +847,33 @@ async function startScript() {
     const question = (query) => new Promise(resolve => rl.question(query, resolve));
     const twentyFourHoursInMs = 24 * 60 * 60 * 1000;
 
-    logger.banner("Multi-Bot Controller");
+    controllerLogger.banner("Multi-Bot Controller");
     const choice = await question(
-        `${colors.white}Which bot would you like to run?\n` +
+        `${controllerColors.white}Which bot would you like to run?\n` +
         `[1] 0G Storage Uploader\n` +
         `[2] Jaine DeFi Bot\n` +
-        `Enter your choice: ${colors.reset}`
+        `Enter your choice: ${controllerColors.reset}`
     );
 
     if (choice === '1') {
-        const countInput = await question(`\n${colors.white}[?] How many files to upload per wallet per 24-hour cycle? ${colors.reset}`);
+        const countInput = await question(`\n${controllerColors.white}[?] How many files to upload per wallet per 24-hour cycle? ${controllerColors.reset}`);
         const count = parseInt(countInput);
         rl.close();
         
         const uploadCount = (isNaN(count) || count <= 0) ? 1 : count;
         if (isNaN(count) || count <= 0) {
-            logger.warn('Invalid number. Defaulting to 1.');
+            controllerLogger.warn('Invalid number. Defaulting to 1.');
         }
 
         const runUploaderCycle = async () => {
             try {
                 await runUploads(uploadCount);
-                logger.info(`0G Uploader cycle finished.`);
+                controllerLogger.info(`0G Uploader cycle finished.`);
                 const nextRunTime = new Date(Date.now() + twentyFourHoursInMs);
-                logger.info(`Next cycle will start in 24 hours at ${nextRunTime.toLocaleString('id-ID')}`);
+                controllerLogger.info(`Next cycle will start in 24 hours at ${nextRunTime.toLocaleString('id-ID')}`);
             } catch (error) {
-                logger.critical(`An error occurred during the uploader cycle: ${error.message}`);
-                logger.info(`Retrying in 24 hours...`);
+                controllerLogger.critical(`An error occurred during the uploader cycle: ${error.message}`);
+                controllerLogger.info(`Retrying in 24 hours...`);
             }
         };
 
@@ -668,15 +884,17 @@ async function startScript() {
         setInterval(runUploaderCycle, twentyFourHoursInMs);
 
     } else if (choice === '2') {
-        rl.close(); // Jaine bot handles its own readline interface
-        await runJaineBot(); // This function already contains the 24-hour loop
+        // The Jaine bot handles its own readline interface, so we close the main one.
+        rl.close(); 
+        // The runJaineBot function now contains the entire logic from the new script.
+        await runJaineBot(); 
     } else {
-        logger.error("Invalid choice. Exiting.");
+        controllerLogger.error("Invalid choice. Exiting.");
         rl.close();
     }
 }
 
 startScript().catch(err => {
-    logger.critical(`An unexpected error occurred: ${err.message}`);
+    controllerLogger.critical(`An unexpected error occurred: ${err.message}`);
     console.error(err);
 });
