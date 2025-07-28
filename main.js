@@ -76,7 +76,6 @@ const logger = {
         console.log(`${colors.gray}${line}${colors.reset}\n`);
     },
     countdown: (msg) => process.stdout.write(`\r${colors.blue}[⏰] ${msg}${colors.reset}`),
-    // Added logger.wallet to support the new script
     wallet: (msg) => console.log(`${colors.lightBlue}[W] ${msg}${colors.reset}`),
 };
 
@@ -406,7 +405,7 @@ async function runUploads(countPerWallet) {
  }; 
 
  const tokenDecimals = { 
-     USDT: 18, 
+     USDT: 6, // *** PERBAIKAN: Mengubah USDT dari 18 menjadi 6 desimal ***
      BTC: 18, 
      ETH: 18, 
      GIMO: 18 
@@ -414,9 +413,9 @@ async function runUploads(countPerWallet) {
 
  const ERC20_ABI = [ 
      "function approve(address spender, uint256 amount) returns (bool)", 
-     "function allowance(address owner, uint256 amount) returns (uint256)", // Corrected allowance signature
-    "function balanceOf(address owner) view returns (uint256)", // Added balanceOf
-    "function decimals() view returns (uint8)", // Added decimals
+     "function allowance(address owner, address spender) view returns (uint256)", // Perbaiki signature allowance
+    "function balanceOf(address owner) view returns (uint256)", // Tambahkan balanceOf
+    "function decimals() view returns (uint8)", // Tambahkan decimals
      "event Transfer(address indexed from, address indexed to, uint256 indexed tokenId)" 
  ]; 
 
@@ -567,6 +566,19 @@ async function runUploads(countPerWallet) {
      } 
  } 
 
+ // Fungsi untuk memeriksa saldo token
+ async function checkTokenBalance(wallet, tokenAddress, tokenName, decimals) {
+    const tokenContract = new ethers.Contract(tokenAddress, ERC20_ABI, provider); // Gunakan provider
+    try {
+        const balance = await tokenContract.balanceOf(wallet.address);
+        logger.info(`Wallet ${wallet.address} balance for ${tokenName}: ${formatUnits(balance, decimals)}`);
+        return balance;
+    } catch (error) {
+        logger.error(`Failed to get balance for ${tokenName}: ${error.message}`);
+        return 0n;
+    }
+}
+
  async function approveToken(wallet, tokenAddress, amount, decimals) { 
      const tokenContract = new ethers.Contract(tokenAddress, ERC20_ABI, wallet); 
      const spenderAddress = contracts.positionsNFT; 
@@ -599,6 +611,19 @@ async function runUploads(countPerWallet) {
      const token1Decimals = tokenDecimals.USDT; 
 
      logger.step(`Adding liquidity: ${btcAmount} BTC + ${usdtAmount} USDT`); 
+
+    // *** PERBAIKAN: Tambahkan pengecekan saldo sebelum addLiquidity ***
+    const btcBalance = await checkTokenBalance(wallet, token0Address, 'BTC', token0Decimals);
+    const usdtBalance = await checkTokenBalance(wallet, token1Address, 'USDT', token1Decimals);
+
+    if (btcBalance < parseUnits(btcAmount, token0Decimals)) {
+        logger.error(`Insufficient BTC balance for ${wallet.address}. Needed: ${btcAmount}, Have: ${formatUnits(btcBalance, token0Decimals)}`);
+        return; // Hentikan operasi jika saldo tidak cukup
+    }
+    if (usdtBalance < parseUnits(usdtAmount, token1Decimals)) {
+        logger.error(`Insufficient USDT balance for ${wallet.address}. Needed: ${usdtAmount}, Have: ${formatUnits(usdtBalance, token1Decimals)}`);
+        return; // Hentikan operasi jika saldo tidak cukup
+    }
 
      try { 
          await approveToken(wallet, token0Address, btcAmount, token0Decimals); 
@@ -670,6 +695,13 @@ async function runUploads(countPerWallet) {
      const tokenInDecimals = tokenDecimals[tokenInName]; 
 
      logger.step(`Starting swap of ${amount} ${tokenInName} -> ${tokenOutName}...`); 
+
+    // *** PERBAIKAN: Tambahkan pengecekan saldo sebelum swap ***
+    const tokenInBalance = await checkTokenBalance(wallet, tokenInAddress, tokenInName, tokenInDecimals);
+    if (tokenInBalance < parseUnits(amount, tokenInDecimals)) {
+        logger.error(`Insufficient ${tokenInName} balance for swap. Needed: ${amount}, Have: ${formatUnits(tokenInBalance, tokenInDecimals)}`);
+        return; // Hentikan operasi jika saldo tidak cukup
+    }
 
      try { 
          const tokenContract = new ethers.Contract(tokenInAddress, ERC20_ABI, wallet); 
